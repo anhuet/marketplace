@@ -13,7 +13,6 @@ _(nothing in progress)_
 
 ## Up Next (prioritized)
 
-- [ ] #002 — Set up monorepo workspace: yarn workspaces, TypeScript configs, shared types package, Prettier + ESLint [area: setup] → [.tasks/002-monorepo-setup.md](.tasks/002-monorepo-setup.md)
 - [ ] #003 — Set up Express backend boilerplate: server, Prisma client, middleware (auth, validation, error handler), folder structure [area: backend] → [.tasks/003-backend-boilerplate.md](.tasks/003-backend-boilerplate.md)
 - [ ] #004 — Implement auth API: register (with invite code validation), login, logout, JWT middleware [area: backend] → [.tasks/004-auth-api.md](.tasks/004-auth-api.md)
 - [ ] #005 — Implement invite code API: generate code, validate code on registration [area: backend] → [.tasks/005-invite-code-api.md](.tasks/005-invite-code-api.md)
@@ -44,6 +43,7 @@ _(nothing in progress)_
 
 - [x] #000 — Initial project setup and template configuration → [.tasks/000-initial-project-setup.md](.tasks/000-initial-project-setup.md)
 - [x] #001 — Design database schema: users, invite_codes, listings, images, conversations, messages, reviews [area: database] → [.tasks/001-database-schema.md](.tasks/001-database-schema.md)
+- [x] #002 — Set up monorepo workspace: yarn workspaces, TypeScript configs, shared types package, Prettier + ESLint [area: setup] → [.tasks/002-monorepo-setup.md](.tasks/002-monorepo-setup.md)
 
 ---
 
