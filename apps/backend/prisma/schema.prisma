@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  auth0Id       String   @unique @map("auth0_id")
+  email         String   @unique
+  displayName   String   @map("display_name")
+  avatarUrl     String?  @map("avatar_url")
+  bio           String?
+  averageRating Float    @default(0) @map("average_rating")
+  ratingCount   Int      @default(0) @map("rating_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  inviteCodeCreated  InviteCode?  @relation("CreatedBy")
+  inviteCodeUsed     InviteCode?  @relation("UsedBy", fields: [inviteCodeUsedId], references: [id])
+  inviteCodeUsedId   String?      @unique @map("invite_code_used_id")
+
+  listings           Listing[]
+  buyerConversations Conversation[] @relation("Buyer")
+  reviewsGiven       Review[]       @relation("Reviewer")
+  reviewsReceived    Review[]       @relation("Reviewee")
+  pushTokens         PushToken[]
+
+  @@map("users")
+}
+
+model InviteCode {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  createdBy   User      @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById String    @unique @map("created_by_id")
+  usedBy      User?     @relation("UsedBy")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("invite_codes")
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  DELETED
+}
+
+enum Condition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  slug     String    @unique
+  listings Listing[]
+
+  @@map("categories")
+}
+
+model Listing {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  price       Decimal       @db.Decimal(10, 2)
+  condition   Condition
+  status      ListingStatus @default(ACTIVE)
+  latitude    Float
+  longitude   Float
+  categoryId  String        @map("category_id")
+  sellerId    String        @map("seller_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  seller        User           @relation(fields: [sellerId], references: [id])
+  category      Category       @relation(fields: [categoryId], references: [id])
+  images        ListingImage[]
+  conversations Conversation[]
+  reviews       Review[]
+
+  @@index([latitude, longitude])
+  @@index([status])
+  @@index([sellerId])
+  @@index([categoryId])
+  @@map("listings")
+}
+
+model ListingImage {
+  id        String   @id @default(uuid())
+  listingId String   @map("listing_id")
+  url       String
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@map("listing_images")
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  listingId String   @map("listing_id")
+  buyerId   String   @map("buyer_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  listing  Listing   @relation(fields: [listingId], references: [id])
+  buyer    User      @relation("Buyer", fields: [buyerId], references: [id])
+  messages Message[]
+
+  @@unique([listingId, buyerId])
+  @@index([buyerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String    @id @default(uuid())
+  conversationId String    @map("conversation_id")
+  senderId       String    @map("sender_id")
+  content        String
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  listingId  String   @map("listing_id")
+  reviewerId String   @map("reviewer_id")
+  revieweeId String   @map("reviewee_id")
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  listing  Listing @relation(fields: [listingId], references: [id])
+  reviewer User    @relation("Reviewer", fields: [reviewerId], references: [id])
+  reviewee User    @relation("Reviewee", fields: [revieweeId], references: [id])
+
+  @@unique([listingId, reviewerId, revieweeId])
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+enum Platform {
+  IOS
+  ANDROID
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  platform  Platform
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
+}
