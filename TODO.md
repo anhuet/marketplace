@@ -19,9 +19,6 @@ _(nothing in progress)_
 
 ## Backlog
 
-- [ ] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
-- [ ] #010 — Implement push notifications: Expo push token registration, send notification on new message/inquiry [area: backend] → [.tasks/010-push-notifications-backend.md](.tasks/010-push-notifications-backend.md)
-- [ ] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
 - [ ] #010 — Implement push notifications: Expo push token registration, send notification on new message/inquiry [area: backend] → [.tasks/010-push-notifications-backend.md](.tasks/010-push-notifications-backend.md)
 - [ ] #011 — Design UX flows: auth screens, listing browse/detail, chat, profile, post listing [area: design] → [.tasks/011-ux-design-flows.md](.tasks/011-ux-design-flows.md)
 - [ ] #012 — Build Expo mobile app scaffold: navigation structure (React Navigation), Zustand store, API client, Socket.io client [area: mobile] → [.tasks/012-mobile-app-scaffold.md](.tasks/012-mobile-app-scaffold.md)
@@ -46,6 +43,7 @@ _(nothing in progress)_
 - [x] #005 — Implement invite code API: generate code, validate code on registration [area: backend] → [.tasks/005-invite-code-api.md](.tasks/005-invite-code-api.md)
 - [x] #006 — Implement listings API: CRUD endpoints, image upload, GPS coordinates storage [area: backend] → [.tasks/006-listings-api.md](.tasks/006-listings-api.md)
 - [x] #007 — Implement GPS-based discovery API: listings by distance (Haversine), filters (radius, category, keyword) [area: backend] → [.tasks/007-discovery-api.md](.tasks/007-discovery-api.md)
+- [x] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
 
 ---
 

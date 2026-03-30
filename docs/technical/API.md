@@ -182,7 +182,74 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 
 ## Users
 
-> Routes to be added in a future task.
+### GET /api/v1/users/:id/reviews
+
+**Auth required**: No
+**Description**: Returns paginated reviews received by the specified user, ordered newest first. Each review includes the reviewer's display name and avatar, and the listing title it relates to.
+
+**Path parameters**:
+- `id` — user UUID
+
+**Query parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (min 1) |
+| `limit` | integer | No | `20` | Results per page (1 – 50) |
+
+**Response 200**:
+```json
+{
+  "reviews": [
+    {
+      "id": "string — UUID",
+      "listingId": "string — UUID",
+      "reviewerId": "string — UUID",
+      "revieweeId": "string — UUID",
+      "rating": "number — integer 1–5",
+      "comment": "string | null",
+      "createdAt": "string — ISO 8601",
+      "reviewer": {
+        "id": "string — UUID",
+        "displayName": "string",
+        "avatarUrl": "string | null"
+      },
+      "listing": {
+        "id": "string — UUID",
+        "title": "string"
+      }
+    }
+  ],
+  "total": "number — total reviews for this user",
+  "page": "number — current page",
+  "limit": "number — results per page",
+  "hasMore": "boolean"
+}
+```
+
+**Error codes**:
+- `400` — Validation error (invalid page/limit values)
+
+---
+
+### GET /api/v1/users/:id/rating
+
+**Auth required**: No
+**Description**: Returns the cached average rating and total review count for the specified user. Values are updated atomically after each new review.
+
+**Path parameters**:
+- `id` — user UUID
+
+**Response 200**:
+```json
+{
+  "averageRating": "number — float, 0 if no reviews yet",
+  "ratingCount": "number — integer, count of reviews received"
+}
+```
+
+**Error codes**:
+- `404` — User not found
 
 ---
 
@@ -485,10 +552,238 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 
 ## Conversations & Messages
 
-> Routes to be added in task #008.
+### POST /api/v1/conversations
+
+**Auth required**: Yes
+**Description**: Creates or retrieves an existing conversation between the authenticated buyer and the listing owner. The unique constraint `(listingId, buyerId)` makes this operation idempotent — calling it twice returns the same conversation. The authenticated user cannot start a conversation on their own listing.
+
+**Request body**:
+```json
+{
+  "listingId": "string — UUID of the listing to enquire about"
+}
+```
+
+**Response 201**:
+```json
+{
+  "conversation": {
+    "id": "string — UUID",
+    "listingId": "string — UUID",
+    "buyerId": "string — UUID",
+    "createdAt": "string — ISO 8601",
+    "updatedAt": "string — ISO 8601",
+    "listing": {
+      "id": "string — UUID",
+      "title": "string",
+      "status": "string — ACTIVE | SOLD | DELETED",
+      "sellerId": "string — UUID",
+      "images": [{ "id": "string", "url": "string", "order": 0 }]
+    },
+    "buyer": {
+      "id": "string — UUID",
+      "displayName": "string",
+      "avatarUrl": "string | null"
+    }
+  }
+}
+```
+
+**Error codes**:
+- `400` — Validation error (listingId not a UUID, or buyer is the seller)
+- `401` — Missing or invalid Auth0 Bearer token
+- `404` — Listing not found
+
+---
+
+### GET /api/v1/conversations
+
+**Auth required**: Yes
+**Description**: Returns all conversations for the authenticated user — both as buyer and as seller. Each entry includes the last message and an unread count. Results are ordered by most recently updated first.
+
+**Response 200**:
+```json
+{
+  "conversations": [
+    {
+      "id": "string — UUID",
+      "listingId": "string — UUID",
+      "buyerId": "string — UUID",
+      "createdAt": "string — ISO 8601",
+      "updatedAt": "string — ISO 8601",
+      "listing": {
+        "id": "string — UUID",
+        "title": "string",
+        "status": "string — ACTIVE | SOLD | DELETED",
+        "sellerId": "string — UUID",
+        "images": [{ "id": "string", "url": "string", "order": 0 }]
+      },
+      "buyer": {
+        "id": "string — UUID",
+        "displayName": "string",
+        "avatarUrl": "string | null"
+      },
+      "messages": [
+        {
+          "id": "string — UUID",
+          "conversationId": "string — UUID",
+          "senderId": "string — UUID",
+          "content": "string",
+          "readAt": "string | null — ISO 8601",
+          "createdAt": "string — ISO 8601"
+        }
+      ],
+      "unreadCount": "number — count of unread messages sent by the other participant"
+    }
+  ]
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+
+---
+
+### GET /api/v1/conversations/:id/messages
+
+**Auth required**: Yes
+**Description**: Returns the message history for a conversation in ascending chronological order. Only participants (buyer or seller) may access this endpoint. Fetching messages marks all unread messages from the other participant as read. Supports cursor-based pagination via the `cursor` query parameter.
+
+**Path parameters**:
+- `id` — conversation UUID
+
+**Query parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cursor` | string (UUID) | No | — | ID of the last message seen; returns messages after this cursor |
+| `limit` | integer | No | `30` | Number of messages to return (1 – 100) |
+
+**Response 200**:
+```json
+{
+  "messages": [
+    {
+      "id": "string — UUID",
+      "conversationId": "string — UUID",
+      "senderId": "string — UUID",
+      "content": "string",
+      "readAt": "string | null — ISO 8601",
+      "createdAt": "string — ISO 8601"
+    }
+  ]
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Authenticated user is not a participant in this conversation
+
+---
+
+### POST /api/v1/conversations/:id/messages
+
+**Auth required**: Yes
+**Description**: Persists a new message in the conversation and emits a `new_message` Socket.io event to the `conversation:{id}` room so all connected participants receive it in real time. Only participants may send messages.
+
+**Path parameters**:
+- `id` — conversation UUID
+
+**Request body**:
+```json
+{
+  "content": "string — message text, 1–2000 characters"
+}
+```
+
+**Response 201**:
+```json
+{
+  "message": {
+    "id": "string — UUID",
+    "conversationId": "string — UUID",
+    "senderId": "string — UUID",
+    "content": "string",
+    "readAt": null,
+    "createdAt": "string — ISO 8601"
+  }
+}
+```
+
+**Error codes**:
+- `400` — Validation error (empty content or exceeds 2000 chars)
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Authenticated user is not a participant in this conversation
+
+---
+
+## Socket.io — Real-Time Messaging
+
+**Connection URL**: Same host as the REST API (Socket.io shares the HTTP server).
+**Transport**: WebSocket with HTTP long-polling fallback.
+
+### Authentication
+
+Pass the Auth0 JWT in the `auth` handshake object:
+
+```javascript
+const socket = io(SERVER_URL, {
+  auth: { token: '<auth0-access-token>' }
+});
+```
+
+Connections without a valid token are rejected with an error event. On successful connection, the server automatically joins the socket to `conversation:{id}` rooms for all conversations the authenticated user participates in.
+
+### Client Events (emit to server)
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `join_conversation` | `conversationId: string` | Join a specific conversation room, e.g. after `POST /conversations` creates a new one |
+
+### Server Events (received by client)
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `new_message` | `Message` object (same shape as REST response) | Emitted to `conversation:{id}` room when a new message is sent via `POST /conversations/:id/messages` |
 
 ---
 
 ## Reviews
 
-> Routes to be added in task #009.
+### POST /api/v1/reviews
+
+**Auth required**: Yes
+**Description**: Creates a review for a completed transaction. The listing must have status `SOLD`. The authenticated user must be either the buyer (a participant in a conversation on the listing) or the seller. One review is allowed per direction per listing — duplicate attempts return a 409.
+
+**Request body**:
+```json
+{
+  "listingId": "string — UUID of the SOLD listing",
+  "revieweeId": "string — UUID of the user being reviewed",
+  "rating": "number — integer 1–5",
+  "comment": "string | undefined — optional text, max 1000 chars"
+}
+```
+
+**Response 201**:
+```json
+{
+  "review": {
+    "id": "string — UUID",
+    "listingId": "string — UUID",
+    "reviewerId": "string — UUID",
+    "revieweeId": "string — UUID",
+    "rating": "number — integer 1–5",
+    "comment": "string | null",
+    "createdAt": "string — ISO 8601"
+  }
+}
+```
+
+**Error codes**:
+- `400` — Validation error (invalid UUID, rating out of range, comment too long, self-review attempt)
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Authenticated user is not a participant in this transaction
+- `404` — Listing not found
+- `409` — Review already submitted for this direction on this listing (error code `CONFLICT`)
+- `422` — Listing is not in `SOLD` status (error code `UNPROCESSABLE`)
