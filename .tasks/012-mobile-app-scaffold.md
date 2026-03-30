@@ -42,3 +42,4 @@ Scaffold the `apps/mobile` Expo application with full navigation structure, glob
 |------|--------------|-------|
 | 2026-03-29 | human | Task created |
 | 2026-03-30 | @react-native-developer | Mobile scaffold complete: React Navigation v6 structure, Zustand stores (auth + chat), typed axios API client, Socket.io client, design tokens, placeholder screens for all routes |
+| 2026-03-30 | @react-native-developer | Finalised scaffold: updated package.json with all Expo SDK deps (expo-constants, expo-image-picker, expo-location, expo-notifications, react-native-auth0, react-native-gesture-handler, react-native-vector-icons), added EditProfile route to ProfileStackParamList + ProfileNavigator, added UserProfile + Search query param to nav types, wrapped App.tsx with GestureHandlerRootView and SafeAreaProvider, created EditProfileScreen placeholder |

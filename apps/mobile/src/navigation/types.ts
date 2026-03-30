@@ -18,7 +18,7 @@ export type BrowseStackParamList = {
 
 // Search Stack
 export type SearchStackParamList = {
-  Search: undefined;
+  Search: { query?: string };
   ListingDetail: { listingId: string };
 };
 
@@ -31,9 +31,10 @@ export type SellStackParamList = {
 export type ProfileStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
+  Settings: undefined;
   ConversationList: undefined;
   ChatThread: { conversationId: string; listingTitle: string };
-  Settings: undefined;
+  UserProfile: { userId: string };
 };
 
 // Main Tab Navigator
@@ -57,6 +58,12 @@ export type AuthStackScreenProps<T extends keyof AuthStackParamList> =
 export type BrowseStackScreenProps<T extends keyof BrowseStackParamList> =
   CompositeScreenProps<
     NativeStackScreenProps<BrowseStackParamList, T>,
+    BottomTabScreenProps<MainTabParamList>
+  >;
+
+export type SearchStackScreenProps<T extends keyof SearchStackParamList> =
+  CompositeScreenProps<
+    NativeStackScreenProps<SearchStackParamList, T>,
     BottomTabScreenProps<MainTabParamList>
   >;
 

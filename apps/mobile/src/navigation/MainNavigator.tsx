@@ -15,9 +15,11 @@ import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
 import SearchScreen from '../screens/search/SearchScreen';
 import PostListingScreen from '../screens/sell/PostListingScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
+import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ConversationListScreen from '../screens/chat/ConversationListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
+import UserProfileScreen from '../screens/profile/UserProfileScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const BrowseStack = createNativeStackNavigator<BrowseStackParamList>();
@@ -85,6 +87,11 @@ function ProfileNavigator() {
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Edit Profile' }}
+      />
+      <ProfileStack.Screen
         name="ConversationList"
         component={ConversationListScreen}
         options={{ title: 'Messages' }}
@@ -98,6 +105,11 @@ function ProfileNavigator() {
         name="Settings"
         component={SettingsScreen}
         options={{ title: 'Settings' }}
+      />
+      <ProfileStack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ title: '' }}
       />
     </ProfileStack.Navigator>
   );
