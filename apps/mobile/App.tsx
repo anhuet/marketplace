@@ -1,21 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import RootNavigator from './src/navigation/RootNavigator';
 
 export default function App(): React.JSX.Element {
   return (
-    <View style={styles.container}>
-      <Text>Marketplace</Text>
+    <>
+      <RootNavigator />
       <StatusBar style="auto" />
-    </View>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

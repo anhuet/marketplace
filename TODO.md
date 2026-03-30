@@ -19,8 +19,6 @@ _(nothing up next)_
 
 ## Backlog
 
-- [ ] #011 — Design UX flows: auth screens, listing browse/detail, chat, profile, post listing [area: design] → [.tasks/011-ux-design-flows.md](.tasks/011-ux-design-flows.md)
-- [ ] #012 — Build Expo mobile app scaffold: navigation structure (React Navigation), Zustand store, API client, Socket.io client [area: mobile] → [.tasks/012-mobile-app-scaffold.md](.tasks/012-mobile-app-scaffold.md)
 - [ ] #013 — Build auth screens: signup (with invite code field), login, logout [area: mobile] → [.tasks/013-auth-screens.md](.tasks/013-auth-screens.md)
 - [ ] #014 — Build listing browse screen: GPS-filtered list, distance display, search/filter UI [area: mobile] → [.tasks/014-listing-browse-screen.md](.tasks/014-listing-browse-screen.md)
 - [ ] #015 — Build listing detail screen: photos, description, price, seller info, "Message Seller" button [area: mobile] → [.tasks/015-listing-detail-screen.md](.tasks/015-listing-detail-screen.md)
@@ -45,6 +43,8 @@ _(nothing up next)_
 - [x] #008 — Implement chat API + Socket.io: conversation creation, message history, real-time WebSocket events [area: backend] → [.tasks/008-chat-api-websocket.md](.tasks/008-chat-api-websocket.md)
 - [x] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
 - [x] #010 — Implement push notifications: Expo push token registration, send notification on new message/inquiry [area: backend] → [.tasks/010-push-notifications-backend.md](.tasks/010-push-notifications-backend.md)
+- [x] #011 — Design UX flows: auth screens, listing browse/detail, chat, profile, post listing [area: design] → [.tasks/011-ux-design-flows.md](.tasks/011-ux-design-flows.md)
+- [x] #012 — Build Expo mobile app scaffold: navigation structure (React Navigation), Zustand store, API client, Socket.io client [area: mobile] → [.tasks/012-mobile-app-scaffold.md](.tasks/012-mobile-app-scaffold.md)
 
 ---
 

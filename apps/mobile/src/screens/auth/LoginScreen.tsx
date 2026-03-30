@@ -1,0 +1,143 @@
+import React, { useState } from 'react';
+import {
+  Text,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Auth0 from 'react-native-auth0';
+import Constants from 'expo-constants';
+import { useAuthStore } from '../../store/authStore';
+import { api } from '../../lib/api';
+import PrimaryButton from '../../components/PrimaryButton';
+import { colors, spacing, typography } from '../../theme/tokens';
+import { AuthStackScreenProps } from '../../navigation/types';
+
+const auth0 = new Auth0({
+  domain: Constants.expoConfig?.extra?.auth0Domain ?? '',
+  clientId: Constants.expoConfig?.extra?.auth0ClientId ?? '',
+});
+
+type Props = AuthStackScreenProps<'Login'>;
+
+export default function LoginScreen({ navigation }: Props): React.JSX.Element {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const setAuth = useAuthStore((s) => s.setAuth);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const credentials = await auth0.webAuth.authorize({
+        scope: 'openid profile email',
+        audience: Constants.expoConfig?.extra?.auth0Audience ?? '',
+      });
+
+      if (!credentials.accessToken) {
+        throw new Error('No access token received from Auth0.');
+      }
+
+      const { data } = await api.getMe();
+      setAuth(data.user, credentials.accessToken);
+      // RootNavigator observes isAuthenticated and transitions to MainTabs automatically
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Login failed. Please try again.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to your Marketplace account.</Text>
+
+          {error ? (
+            <Text
+              style={styles.errorBanner}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+            >
+              {error}
+            </Text>
+          ) : null}
+
+          <PrimaryButton
+            label="Sign In"
+            onPress={handleLogin}
+            loading={loading}
+            style={styles.button}
+            testID="login-button"
+          />
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Signup')}
+            accessibilityRole="button"
+            accessibilityLabel="Don't have an account? Create one"
+            style={styles.signupLink}
+          >
+            <Text style={styles.signupLinkText}>
+              {"Don't have an account? "}
+              <Text style={styles.signupLinkBold}>Create one</Text>
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xl,
+    justifyContent: 'center',
+  },
+  title: {
+    ...typography.display,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginBottom: spacing.xl,
+  },
+  errorBanner: {
+    ...typography.caption,
+    color: colors.error,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 8,
+    padding: spacing.sm,
+    marginBottom: spacing.base,
+  },
+  button: { marginBottom: spacing.base },
+  signupLink: { marginTop: spacing.base },
+  signupLinkText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  signupLinkBold: {
+    color: colors.primaryDark,
+    fontWeight: '600',
+  },
+});
