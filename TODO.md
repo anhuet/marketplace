@@ -13,16 +13,14 @@ _(nothing in progress)_
 
 ## Up Next (prioritized)
 
-- [ ] #004 — Implement auth API: register (with invite code validation), login, logout, JWT middleware [area: backend] → [.tasks/004-auth-api.md](.tasks/004-auth-api.md)
-- [ ] #005 — Implement invite code API: generate code, validate code on registration [area: backend] → [.tasks/005-invite-code-api.md](.tasks/005-invite-code-api.md)
+- [ ] #008 — Implement chat API + Socket.io: conversation creation, message history, real-time WebSocket events [area: backend] → [.tasks/008-chat-api-websocket.md](.tasks/008-chat-api-websocket.md)
 
 ---
 
 ## Backlog
 
-- [ ] #006 — Implement listings API: CRUD endpoints, image upload, GPS coordinates storage [area: backend] → [.tasks/006-listings-api.md](.tasks/006-listings-api.md)
-- [ ] #007 — Implement GPS-based discovery API: listings by distance (PostGIS or Haversine), filters (radius, category, keyword) [area: backend] → [.tasks/007-discovery-api.md](.tasks/007-discovery-api.md)
-- [ ] #008 — Implement chat API + Socket.io: conversation creation, message history, real-time WebSocket events [area: backend] → [.tasks/008-chat-api-websocket.md](.tasks/008-chat-api-websocket.md)
+- [ ] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
+- [ ] #010 — Implement push notifications: Expo push token registration, send notification on new message/inquiry [area: backend] → [.tasks/010-push-notifications-backend.md](.tasks/010-push-notifications-backend.md)
 - [ ] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
 - [ ] #010 — Implement push notifications: Expo push token registration, send notification on new message/inquiry [area: backend] → [.tasks/010-push-notifications-backend.md](.tasks/010-push-notifications-backend.md)
 - [ ] #011 — Design UX flows: auth screens, listing browse/detail, chat, profile, post listing [area: design] → [.tasks/011-ux-design-flows.md](.tasks/011-ux-design-flows.md)
@@ -44,6 +42,10 @@ _(nothing in progress)_
 - [x] #001 — Design database schema: users, invite_codes, listings, images, conversations, messages, reviews [area: database] → [.tasks/001-database-schema.md](.tasks/001-database-schema.md)
 - [x] #002 — Set up monorepo workspace: yarn workspaces, TypeScript configs, shared types package, Prettier + ESLint [area: setup] → [.tasks/002-monorepo-setup.md](.tasks/002-monorepo-setup.md)
 - [x] #003 — Set up Express backend boilerplate: server, Prisma client, middleware (auth, validation, error handler), folder structure [area: backend] → [.tasks/003-backend-boilerplate.md](.tasks/003-backend-boilerplate.md)
+- [x] #004 — Implement Auth0 integration: invite code pre-check, user auto-creation, auth routes [area: backend] → [.tasks/004-auth-api.md](.tasks/004-auth-api.md)
+- [x] #005 — Implement invite code API: generate code, validate code on registration [area: backend] → [.tasks/005-invite-code-api.md](.tasks/005-invite-code-api.md)
+- [x] #006 — Implement listings API: CRUD endpoints, image upload, GPS coordinates storage [area: backend] → [.tasks/006-listings-api.md](.tasks/006-listings-api.md)
+- [x] #007 — Implement GPS-based discovery API: listings by distance (Haversine), filters (radius, category, keyword) [area: backend] → [.tasks/007-discovery-api.md](.tasks/007-discovery-api.md)
 
 ---
 

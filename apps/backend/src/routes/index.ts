@@ -1,14 +1,20 @@
 import { Router } from 'express';
 import healthRouter from './health';
+import authRouter from './auth';
+import invitesRouter from './invites';
+import listingsRouter from './listings';
+import discoveryRouter from './discovery';
 
 const router = Router();
 
 router.use('/health', healthRouter);
+router.use('/auth', authRouter);
+router.use('/invites', invitesRouter);
+router.use('/listings', listingsRouter);
+router.use('/discover', discoveryRouter);
 
-// Feature routes will be added here as tasks are completed:
-// router.use('/auth', authRouter);
+// More feature routes added as tasks complete:
 // router.use('/users', usersRouter);
-// router.use('/listings', listingsRouter);
 // router.use('/conversations', conversationsRouter);
 // router.use('/reviews', reviewsRouter);
 
