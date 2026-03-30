@@ -19,7 +19,6 @@ _(nothing up next)_
 
 ## Backlog
 
-- [ ] #013 — Build auth screens: signup (with invite code field), login, logout [area: mobile] → [.tasks/013-auth-screens.md](.tasks/013-auth-screens.md)
 - [ ] #014 — Build listing browse screen: GPS-filtered list, distance display, search/filter UI [area: mobile] → [.tasks/014-listing-browse-screen.md](.tasks/014-listing-browse-screen.md)
 - [ ] #015 — Build listing detail screen: photos, description, price, seller info, "Message Seller" button [area: mobile] → [.tasks/015-listing-detail-screen.md](.tasks/015-listing-detail-screen.md)
 - [ ] #016 — Build post listing screen: form with photos, description, price, category, GPS capture [area: mobile] → [.tasks/016-post-listing-screen.md](.tasks/016-post-listing-screen.md)
@@ -45,6 +44,7 @@ _(nothing up next)_
 - [x] #010 — Implement push notifications: Expo push token registration, send notification on new message/inquiry [area: backend] → [.tasks/010-push-notifications-backend.md](.tasks/010-push-notifications-backend.md)
 - [x] #011 — Design UX flows: auth screens, listing browse/detail, chat, profile, post listing [area: design] → [.tasks/011-ux-design-flows.md](.tasks/011-ux-design-flows.md)
 - [x] #012 — Build Expo mobile app scaffold: navigation structure (React Navigation), Zustand store, API client, Socket.io client [area: mobile] → [.tasks/012-mobile-app-scaffold.md](.tasks/012-mobile-app-scaffold.md)
+- [x] #013 — Build auth screens: signup (with invite code field), login, logout [area: mobile] → [.tasks/013-auth-screens.md](.tasks/013-auth-screens.md)
 
 ---
 
