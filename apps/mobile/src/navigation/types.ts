@@ -24,7 +24,7 @@ export type SearchStackParamList = {
 
 // Sell Stack
 export type SellStackParamList = {
-  PostListing: undefined;
+  PostListing: { listingId?: string } | undefined;
 };
 
 // Profile Stack
