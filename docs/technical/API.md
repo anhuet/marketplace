@@ -787,3 +787,53 @@ Connections without a valid token are rejected with an error event. On successfu
 - `404` — Listing not found
 - `409` — Review already submitted for this direction on this listing (error code `CONFLICT`)
 - `422` — Listing is not in `SOLD` status (error code `UNPROCESSABLE`)
+
+---
+
+## Push Tokens
+
+### POST /api/v1/push-tokens
+
+**Auth required**: Yes
+**Description**: Registers or updates an Expo push token for the authenticated user's current device. Uses an upsert — if the token already exists (e.g. app reinstall), the `userId` and `updatedAt` fields are refreshed. A user may have multiple tokens across multiple devices.
+
+**Request body**:
+```json
+{
+  "token": "string — Expo push token (e.g. ExponentPushToken[xxx])",
+  "platform": "string — IOS | ANDROID"
+}
+```
+
+**Response 200**:
+```json
+{
+  "success": true
+}
+```
+
+**Error codes**:
+- `400` — Validation error (missing token, invalid platform value)
+- `401` — Missing or invalid Auth0 Bearer token
+
+---
+
+### DELETE /api/v1/push-tokens/:token
+
+**Auth required**: Yes
+**Description**: Removes a push token from the database, opting the device out of push notifications (FR-063). Only the token's registered owner may delete it.
+
+**Path parameters**:
+- `token` — the Expo push token string (URL-encoded if necessary)
+
+**Response 200**:
+```json
+{
+  "success": true
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Token does not belong to the authenticated user
+- `404` — Push token not found

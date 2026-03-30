@@ -13,7 +13,7 @@ _(nothing in progress)_
 
 ## Up Next (prioritized)
 
-- [ ] #008 — Implement chat API + Socket.io: conversation creation, message history, real-time WebSocket events [area: backend] → [.tasks/008-chat-api-websocket.md](.tasks/008-chat-api-websocket.md)
+_(nothing up next)_
 
 ---
 
@@ -43,6 +43,7 @@ _(nothing in progress)_
 - [x] #005 — Implement invite code API: generate code, validate code on registration [area: backend] → [.tasks/005-invite-code-api.md](.tasks/005-invite-code-api.md)
 - [x] #006 — Implement listings API: CRUD endpoints, image upload, GPS coordinates storage [area: backend] → [.tasks/006-listings-api.md](.tasks/006-listings-api.md)
 - [x] #007 — Implement GPS-based discovery API: listings by distance (Haversine), filters (radius, category, keyword) [area: backend] → [.tasks/007-discovery-api.md](.tasks/007-discovery-api.md)
+- [x] #008 — Implement chat API + Socket.io: conversation creation, message history, real-time WebSocket events [area: backend] → [.tasks/008-chat-api-websocket.md](.tasks/008-chat-api-websocket.md)
 - [x] #009 — Implement ratings & reviews API: create review post-sale, fetch user ratings [area: backend] → [.tasks/009-ratings-reviews-api.md](.tasks/009-ratings-reviews-api.md)
 
 ---
