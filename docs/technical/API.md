@@ -182,6 +182,44 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 
 ## Users
 
+### PATCH /api/v1/users/me
+
+**Auth required**: Yes
+**Description**: Updates the authenticated user's own profile. All fields are optional — only the fields provided are updated. Pass `null` for `bio` or `avatarUrl` to explicitly clear those fields.
+
+**Request body**:
+```json
+{
+  "displayName": "string — optional, 1–60 chars",
+  "bio": "string | null — optional, max 300 chars; null clears the field",
+  "avatarUrl": "string | null — optional, must be a valid URL; null clears the field"
+}
+```
+
+**Response 200**:
+```json
+{
+  "user": {
+    "id": "string — UUID",
+    "auth0Id": "string",
+    "email": "string",
+    "displayName": "string",
+    "avatarUrl": "string | null",
+    "bio": "string | null",
+    "averageRating": "number",
+    "ratingCount": "number",
+    "createdAt": "string — ISO 8601",
+    "updatedAt": "string — ISO 8601"
+  }
+}
+```
+
+**Error codes**:
+- `400` — Validation error (displayName too long, bio too long, invalid avatarUrl format)
+- `401` — Missing or invalid Auth0 Bearer token
+
+---
+
 ### GET /api/v1/users/:id/reviews
 
 **Auth required**: No
