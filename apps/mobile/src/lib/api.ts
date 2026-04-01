@@ -37,6 +37,7 @@ export const api = {
   redeemInvite: (code: string) =>
     apiClient.post<{ success: boolean }>('/auth/redeem-invite', { code }),
   getMe: () => apiClient.get<{ user: import('@marketplace/shared').User }>('/auth/me'),
+  // TODO: backend endpoint needed — PATCH /api/v1/users/me is not yet registered in apps/backend/src/routes/users.ts
   updateMe: (data: { displayName?: string; avatarUrl?: string; bio?: string }) =>
     apiClient.patch('/users/me', data),
 
