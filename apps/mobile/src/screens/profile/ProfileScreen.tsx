@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
+  Platform,
   Share,
   StyleSheet,
   Switch,
@@ -13,9 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
-import * as Notifications from 'expo-notifications';
 
 import { api } from '../../lib/api';
+import { unregisterPushToken } from '../../hooks/usePushNotifications';
 import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import StarRating from '../../components/StarRating';
@@ -44,7 +45,7 @@ function formatDate(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen({ navigation }: Props): React.JSX.Element {
-  const { user, clearAuth } = useAuthStore();
+  const { user, clearAuth, pushToken } = useAuthStore();
 
   // Listings
   const [listings, setListings] = useState<ListingWithDetails[]>([]);
@@ -67,7 +68,6 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
   // Push notifications toggle
   const [pushEnabled, setPushEnabled] = useState(true);
   const [pushToggling, setPushToggling] = useState(false);
-  const pushTokenRef = useRef<string | null>(null);
 
   // ── Data fetching ────────────────────────────────────────────────────────
 
@@ -122,21 +122,11 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
     }
   }, []);
 
-  const resolvePushToken = useCallback(async () => {
-    try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      pushTokenRef.current = tokenData.data;
-    } catch {
-      // Push notifications not available in this environment
-    }
-  }, []);
-
   useEffect(() => {
     loadListings();
     loadReviews(1);
     loadInviteCode();
-    resolvePushToken();
-  }, [loadListings, loadReviews, loadInviteCode, resolvePushToken]);
+  }, [loadListings, loadReviews, loadInviteCode]);
 
   // ── Invite copy ──────────────────────────────────────────────────────────
 
@@ -158,7 +148,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
   const handlePushToggle = useCallback(
     async (enabled: boolean) => {
-      if (!pushTokenRef.current) {
+      if (!pushToken) {
         Alert.alert(
           'Push Notifications',
           'No push token found. Please make sure push notifications are enabled in your device settings.',
@@ -168,12 +158,11 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
       setPushToggling(true);
       try {
         if (!enabled) {
-          await api.deletePushToken(pushTokenRef.current);
+          await api.deletePushToken(pushToken);
           setPushEnabled(false);
         } else {
-          const platform =
-            (await import('react-native')).Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
-          await api.registerPushToken(pushTokenRef.current, platform);
+          const platform: 'IOS' | 'ANDROID' = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
+          await api.registerPushToken(pushToken, platform);
           setPushEnabled(true);
         }
       } catch {
@@ -182,7 +171,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
         setPushToggling(false);
       }
     },
-    [],
+    [pushToken],
   );
 
   // ── Logout ───────────────────────────────────────────────────────────────
@@ -193,13 +182,9 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: () => {
-          // Deregister push token before clearing auth
-          if (pushTokenRef.current) {
-            api.deletePushToken(pushTokenRef.current).catch(() => {
-              // Best-effort — proceed with logout regardless
-            });
-          }
+        onPress: async () => {
+          // Best-effort deregister — proceed with logout regardless of network failure
+          await unregisterPushToken();
           clearAuth();
         },
       },

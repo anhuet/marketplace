@@ -7,8 +7,10 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  pushToken: string | null;
   setAuth: (user: User, token: string) => void;
   updateUser: (user: Partial<User>) => void;
+  setPushToken: (pushToken: string | null) => void;
   clearAuth: () => void;
 }
 
@@ -18,12 +20,14 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      pushToken: null,
       setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
       updateUser: (partial) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...partial } : null,
         })),
-      clearAuth: () => set({ user: null, token: null, isAuthenticated: false }),
+      setPushToken: (pushToken) => set({ pushToken }),
+      clearAuth: () => set({ user: null, token: null, isAuthenticated: false, pushToken: null }),
     }),
     {
       name: 'marketplace-auth',
