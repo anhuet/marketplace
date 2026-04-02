@@ -251,3 +251,153 @@ Named API groups (`authApi`, `invitesApi`, `listingsApi`, `conversationsApi`, `r
 | `expo-image-picker` | ~15.0.0 | Camera roll / camera access for listing photos |
 | `react-native-gesture-handler` | ~2.16.0 | Required peer for React Navigation; wraps app root |
 | `react-native-safe-area-context` | 4.10.1 | Safe area insets for notch/home-indicator handling |
+
+---
+
+## AWS Infrastructure
+
+> Owner: @systems-architect -- Last updated: 2026-03-30
+
+### Region and Environment
+
+- **Region**: eu-west-1 (Ireland)
+- **Environments**: `staging` (current), `production` (planned)
+- **IaC tool**: AWS CDK (TypeScript) -- code in `infra/`
+
+### C4: Deployment Diagram
+
+```
+Internet
+   │
+   ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  AWS eu-west-1                                                       │
+│                                                                      │
+│  ┌─── Public Subnets (2 AZs) ───────────────────────────────────┐   │
+│  │                                                               │   │
+│  │   ┌───────────────────────┐                                   │   │
+│  │   │  Application Load     │  ← HTTPS (443) / HTTP (80)       │   │
+│  │   │  Balancer (ALB)       │                                   │   │
+│  │   └───────────┬───────────┘                                   │   │
+│  └───────────────┼───────────────────────────────────────────────┘   │
+│                  │ :3000                                             │
+│  ┌─── Private Subnets (with NAT) ───────────────────────────────┐   │
+│  │               ▼                                               │   │
+│  │   ┌───────────────────────┐                                   │   │
+│  │   │  ECS Fargate Service  │  ← Node.js/Express container     │   │
+│  │   │  (marketplace-backend)│                                   │   │
+│  │   └───────────┬───────────┘                                   │   │
+│  └───────────────┼───────────────────────────────────────────────┘   │
+│                  │ :5432                                             │
+│  ┌─── Isolated Subnets (no internet) ───────────────────────────┐   │
+│  │               ▼                                               │   │
+│  │   ┌───────────────────────┐                                   │   │
+│  │   │  RDS PostgreSQL 15    │  ← db.t3.micro (staging)         │   │
+│  │   │  (single AZ)         │    encrypted at rest              │   │
+│  │   └───────────────────────┘                                   │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌── Other Services ─────────────────────────────────────────────┐   │
+│  │   S3 Bucket (listing images)    ← presigned URL access only   │   │
+│  │   Secrets Manager               ← DB creds + Auth0 secrets   │   │
+│  │   CloudWatch Logs               ← container logs (30d)       │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### VPC Topology
+
+The VPC (`10.0.0.0/16`) spans 2 Availability Zones with three subnet tiers:
+
+| Tier | Subnet type | CIDR mask | Purpose | Internet access |
+|------|-------------|-----------|---------|-----------------|
+| Public | `PUBLIC` | /24 | ALB | Direct (IGW) |
+| Private | `PRIVATE_WITH_EGRESS` | /24 | ECS Fargate tasks | Outbound only (NAT Gateway) |
+| Isolated | `PRIVATE_ISOLATED` | /24 | RDS PostgreSQL | None |
+
+**NAT Gateways**: 1 (staging cost optimisation). Production should use 2 (one per AZ) for availability.
+
+### Security Groups
+
+| Security Group | Inbound rules | Outbound |
+|----------------|--------------|----------|
+| ALB SG | TCP 443 from `0.0.0.0/0`, TCP 80 from `0.0.0.0/0` | All |
+| ECS SG | TCP 3000 from ALB SG only | All (needs NAT for ECR, S3, Secrets Manager) |
+| RDS SG | TCP 5432 from ECS SG only | None |
+
+### RDS PostgreSQL
+
+- **Engine**: PostgreSQL 15
+- **Instance class**: `db.t3.micro` (staging), upgrade path to `db.t3.small`+ for production
+- **Storage**: 20 GB, auto-scaling to 50 GB, encrypted (AES-256)
+- **Multi-AZ**: Off (staging); enable for production
+- **Backups**: Automated, 7-day retention, point-in-time recovery
+- **Deletion protection**: Off (staging), on (production)
+- **PostGIS**: Can be enabled via `CREATE EXTENSION postgis;` on the RDS instance when needed
+
+### ECS Fargate
+
+- **Cluster**: `marketplace-{environment}`
+- **Task definition**: 0.25 vCPU / 512 MB (staging)
+- **Desired count**: 1 (staging), scale horizontally for production
+- **Container image**: Built from `apps/backend/Dockerfile` (multi-stage build)
+- **Health check**: `GET /api/v1/health` via ALB target group
+- **Container insights**: Enabled
+- **Log group**: `/marketplace/{environment}/backend` (30-day retention)
+
+### S3 Image Bucket
+
+- **Bucket name**: `marketplace-images-{environment}-{accountId}`
+- **Access**: Block all public access; backend generates presigned URLs for upload (PUT) and download (GET)
+- **CORS**: All origins allowed (mobile app uses presigned URLs directly)
+- **Encryption**: S3-managed (SSE-S3)
+- **Lifecycle**: Abort incomplete multipart uploads after 1 day
+
+### Secrets Management
+
+All secrets are stored in AWS Secrets Manager -- never in source control or environment files committed to git.
+
+| Secret | Path | Contents |
+|--------|------|----------|
+| Database credentials | `marketplace/{env}/db-credentials` | host, port, username, password, dbname (auto-generated by CDK) |
+| Application secrets | `marketplace/{env}/app-secrets` | AUTH0_DOMAIN, AUTH0_AUDIENCE (manually populated before first deploy) |
+
+Secrets are injected into ECS tasks as environment variables via the `secrets` property on the container definition.
+
+### Prisma Migrations
+
+Prisma migrations are applied as a separate step before or during deployment:
+
+1. **CI/CD approach** (recommended): Run `npx prisma migrate deploy` in a short-lived ECS task or CodeBuild step that has network access to the RDS instance (same VPC, same ECS security group).
+2. **Init container approach**: Add a sidecar or init script in the Dockerfile that runs migrations before starting the server. Suitable for simple deployments but couples migration and app lifecycle.
+
+The RDS security group permits connections from the ECS security group, so any task running in the private subnets with the ECS SG attached can reach the database.
+
+### CDK Stack Structure
+
+| Stack | Resources | Depends on |
+|-------|-----------|------------|
+| `Marketplace-{env}-Network` | VPC, subnets, NAT Gateway, security groups | -- |
+| `Marketplace-{env}-App` | RDS, ECS cluster + Fargate service, ALB, S3 bucket, Secrets Manager | Network stack |
+
+### Deployment
+
+```bash
+# From the infra/ directory:
+cd infra && npm install
+npx cdk bootstrap   # First time only — provisions CDK toolkit stack
+npx cdk synth        # Validate and synthesize CloudFormation templates
+npx cdk deploy --all # Deploy both stacks
+```
+
+### Cost Estimate (Staging)
+
+| Resource | Estimated monthly cost (eu-west-1) |
+|----------|-----------------------------------|
+| NAT Gateway | ~$32 + data transfer |
+| RDS db.t3.micro | ~$15 |
+| ECS Fargate (0.25 vCPU / 512 MB, 1 task) | ~$9 |
+| ALB | ~$16 + LCU charges |
+| S3 | < $1 (low volume) |
+| Secrets Manager | < $1 |
+| **Total** | **~$75/month** |

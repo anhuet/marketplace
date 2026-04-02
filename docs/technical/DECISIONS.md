@@ -49,3 +49,51 @@ Use a **shared workspace package** (`@marketplace/shared`). It is compiled to Ja
 - **Positive**: Single source of truth for all shared types; TypeScript catches contract mismatches at compile time; clean separation of API types from DB models.
 - **Negative**: The shared package must be built before running dependent apps (mitigated by workspace-level build scripts). Adding a new type requires touching the shared package and rebuilding.
 - **Neutral**: Prisma-generated types in the backend remain separate from shared API types. The backend is responsible for mapping between them.
+
+---
+
+## ADR-003: ECS Fargate for Backend Compute
+
+**Date**: 2026-03-30
+**Status**: Accepted
+**Deciders**: @systems-architect
+
+### Context
+The Marketplace backend (Node.js/Express) needs a compute platform on AWS. The team is small, the product is pre-launch, and operational overhead should be minimised. The backend is stateless (session state lives in Auth0 JWTs; chat state is in PostgreSQL) which gives us flexibility in how we run it. We need the compute layer to sit in private subnets behind an ALB and to pull secrets from Secrets Manager at startup.
+
+### Options Considered
+1. **ECS Fargate**: Serverless container orchestration — no EC2 instances to manage. -- Pros: Zero server patching, automatic bin-packing, simple horizontal scaling (change desired count), integrates natively with ALB and Secrets Manager, pay-per-second for running tasks. Cons: Cold start on scale-out (~30s for a new task), slightly higher per-vCPU cost than reserved EC2, no SSH access for debugging (must rely on CloudWatch Logs and ECS Exec).
+2. **EC2 with Docker + Nginx reverse proxy**: One or more EC2 instances running Docker containers behind an ALB. -- Pros: Lower per-hour cost at sustained utilisation, SSH access for debugging, full OS control. Cons: Requires AMI patching, auto-scaling group configuration, instance health management, manual capacity planning — significant operational burden for a small team.
+3. **AWS Lambda + API Gateway**: Serverless functions, one per route or grouped by domain. -- Pros: True pay-per-invocation, zero idle cost, automatic scaling. Cons: Express does not map cleanly to Lambda without an adapter (e.g. serverless-http); Socket.io (real-time chat) is incompatible with Lambda's request/response model; cold starts on every invocation affect P95 latency; 15-minute execution limit.
+
+### Decision
+Use **ECS Fargate**. The primary reasons are: (1) the backend uses long-lived WebSocket connections for real-time chat, which rules out Lambda; (2) Fargate eliminates all OS-level operations while still running a standard Docker container, which matches the team's capacity; (3) the cost difference vs. EC2 is negligible at staging scale and acceptable at early production scale.
+
+### Consequences
+- **Positive**: No server patching or AMI management; horizontal scaling is a single parameter change; native ALB and Secrets Manager integration; container image is portable to any Docker runtime if we ever leave AWS.
+- **Negative**: Higher per-vCPU cost than reserved EC2 at sustained high utilisation (revisit if monthly Fargate bill exceeds ~$200). No SSH access — debugging requires CloudWatch Logs, ECS Exec, or X-Ray. Cold start on scale-out adds ~30s before a new task is healthy.
+- **Neutral**: The Docker image and health check contract are the same regardless of whether we run on Fargate or EC2, so switching later is low-effort.
+
+---
+
+## ADR-004: S3 Presigned URLs for Image Upload and Retrieval
+
+**Date**: 2026-03-30
+**Status**: Accepted
+**Deciders**: @systems-architect
+
+### Context
+Listing images need to be stored durably and served to mobile clients. The backend must accept image uploads (up to 8 per listing, max 10 MB each) and serve them for display. We need to choose an access pattern for S3 that balances security, performance, and implementation complexity.
+
+### Options Considered
+1. **Presigned URLs (PUT for upload, GET for download)**: The backend generates short-lived signed URLs that the mobile client uses to upload directly to S3 and to fetch images. The S3 bucket blocks all public access. -- Pros: Upload traffic bypasses the backend (saves bandwidth and CPU); bucket is fully private; fine-grained expiry control; works with any HTTP client. Cons: Two-step upload flow (request URL from backend, then PUT to S3); client must handle S3 errors; URL expiry means cached URLs become stale (mitigated by generating fresh URLs or using longer TTLs for GET).
+2. **Public-read ACL on objects**: Backend uploads to S3 on behalf of the client, sets public-read ACL, and stores the public URL. -- Pros: Simple GET — any client can fetch the image without authentication; no URL expiry. Cons: Images are permanently public; no way to revoke access after a listing is deleted; bucket cannot use BlockAllPublicAccess; upload still flows through the backend (bandwidth cost).
+3. **CloudFront + S3 Origin Access Identity**: Serve images via CloudFront CDN with S3 as a private origin. -- Pros: Low-latency global delivery via edge caches; S3 stays private; signed cookies or URLs for access control. Cons: Adds CloudFront distribution cost and configuration complexity; overkill for a staging/early-production app with a single-region user base; does not eliminate the need for presigned upload URLs.
+
+### Decision
+Use **presigned URLs** for both upload and download. The S3 bucket uses `BlockAllPublicAccess`. The backend generates PUT presigned URLs (5-minute TTL) when a listing is created or updated, and GET presigned URLs (1-hour TTL) when listing data is fetched. This keeps the bucket fully private, offloads upload bandwidth from the backend, and avoids CloudFront complexity at this stage.
+
+### Consequences
+- **Positive**: S3 bucket is fully private — no risk of accidental public exposure; upload traffic goes directly from the mobile client to S3, reducing backend bandwidth and latency; presigned URLs work with any HTTP client without SDK dependencies on the mobile side.
+- **Negative**: GET URLs expire, so cached listing data may contain stale image URLs. Mitigation: use a 1-hour TTL for GET URLs and refresh on each API response. If global latency becomes an issue, CloudFront can be layered in front without changing the S3 bucket configuration (additive change).
+- **Neutral**: The backend needs `s3:PutObject` and `s3:GetObject` permissions on the bucket, which are granted via the CDK stack's `grantReadWrite` call on the ECS task role.

@@ -1,0 +1,36 @@
+# Docker build context: monorepo root
+# Only include what the backend Dockerfile needs
+
+# Ignore all node_modules (reinstalled in Docker)
+**/node_modules
+**/.env
+**/.env.*
+
+# Ignore mobile app entirely
+apps/mobile
+
+# Ignore infra
+infra
+
+# Ignore build artifacts
+**/dist
+**/.expo
+**/cdk.out
+
+# Ignore git and IDE files
+.git
+.github
+.vscode
+**/*.log
+
+# Ignore docs and task files
+docs
+.tasks
+.agents
+.claude
+
+# Ignore test artifacts
+**/coverage
+**/.nyc_output
+**/*.test.ts
+**/*.spec.ts

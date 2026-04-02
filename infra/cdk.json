@@ -1,0 +1,29 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package*.json",
+      "node_modules",
+      "dist"
+    ]
+  },
+  "context": {
+    "environment": "staging",
+    "region": "eu-west-1",
+    "vpcCidr": "10.0.0.0/16",
+    "dbInstanceClass": "db.t3.micro",
+    "dbName": "marketplace",
+    "dbPort": 5432,
+    "ecsDesiredCount": 1,
+    "ecsCpu": 256,
+    "ecsMemory": 512,
+    "containerPort": 3000,
+    "s3BucketPrefix": "marketplace-images"
+  }
+}
