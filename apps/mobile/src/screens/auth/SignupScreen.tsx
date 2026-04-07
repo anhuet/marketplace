@@ -19,10 +19,11 @@ import FormInput from '../../components/FormInput';
 import { colors, spacing, typography } from '../../theme/tokens';
 import { AuthStackScreenProps } from '../../navigation/types';
 
-const auth0 = new Auth0({
-  domain: Constants.expoConfig?.extra?.auth0Domain ?? '',
-  clientId: Constants.expoConfig?.extra?.auth0ClientId ?? '',
-});
+const auth0Domain: string = Constants.expoConfig?.extra?.auth0Domain ?? '';
+const auth0ClientId: string = Constants.expoConfig?.extra?.auth0ClientId ?? '';
+const auth0 = auth0Domain && auth0ClientId
+  ? new Auth0({ domain: auth0Domain, clientId: auth0ClientId })
+  : null;
 
 type Props = AuthStackScreenProps<'Signup'>;
 
@@ -71,6 +72,10 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
   const handleContinue = async () => {
     if (!inviteValid) {
       setError('Please enter a valid invite code to continue.');
+      return;
+    }
+    if (!auth0) {
+      setError('Auth0 is not configured. Set EXPO_PUBLIC_AUTH0_DOMAIN and EXPO_PUBLIC_AUTH0_CLIENT_ID in your .env file.');
       return;
     }
 
