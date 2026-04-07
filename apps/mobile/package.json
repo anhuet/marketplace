@@ -2,7 +2,7 @@
   "name": "@marketplace/mobile",
   "version": "1.0.0",
   "private": true,
-  "main": "expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -42,6 +42,6 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "~18.2.79",
-    "typescript": "~5.3.3"
+    "typescript": "^5.3.3"
   }
 }
