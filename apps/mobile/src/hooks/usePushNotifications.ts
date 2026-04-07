@@ -35,8 +35,11 @@ function handleNotificationNavigation(
     return;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const navigate = nav.navigate as (...args: any[]) => void;
+
   if (data.type === 'new_message' && data.conversationId) {
-    nav.navigate('Main' as never, {
+    navigate('Main', {
       screen: 'ProfileTab',
       params: {
         screen: 'ChatThread',
@@ -45,13 +48,13 @@ function handleNotificationNavigation(
           listingTitle: data.listingTitle ?? 'Message',
         },
       },
-    } as never);
+    });
     return;
   }
 
   if (data.type === 'new_inquiry') {
     if (data.conversationId) {
-      nav.navigate('Main' as never, {
+      navigate('Main', {
         screen: 'ProfileTab',
         params: {
           screen: 'ChatThread',
@@ -60,12 +63,12 @@ function handleNotificationNavigation(
             listingTitle: data.listingTitle ?? 'Inquiry',
           },
         },
-      } as never);
+      });
     } else {
-      nav.navigate('Main' as never, {
+      navigate('Main', {
         screen: 'ProfileTab',
         params: { screen: 'ConversationList' },
-      } as never);
+      });
     }
   }
 }

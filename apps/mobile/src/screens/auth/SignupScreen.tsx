@@ -85,7 +85,7 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       const credentials = await auth0.webAuth.authorize({
         scope: 'openid profile email',
         audience: Constants.expoConfig?.extra?.auth0Audience ?? '',
-        prompt: 'login',
+        additionalParameters: { prompt: 'login' },
       });
 
       if (!credentials.accessToken) {

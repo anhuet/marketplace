@@ -3,6 +3,7 @@
   "compilerOptions": {
     "jsx": "react-native",
     "lib": ["ES2020"],
+    "module": "ESNext",
     "allowJs": true,
     "strict": true,
     "noEmit": true,

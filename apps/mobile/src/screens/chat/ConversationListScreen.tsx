@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ConversationWithDetails } from '@marketplace/shared';
+import { ConversationWithDetails, ListingStatus } from '@marketplace/shared';
 
 import { api } from '../../lib/api';
 import { useChatStore } from '../../store/chatStore';
@@ -157,8 +157,12 @@ export default function ConversationListScreen(): React.JSX.Element {
         buyerId: c.buyerId,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
-        listing: c.listing,
-        buyer: c.buyer,
+        listing: {
+          ...c.listing,
+          status: c.listing.status as ListingStatus,
+          images: c.listing.images.map((img) => ({ ...img, listingId: c.listingId })),
+        },
+        buyer: { averageRating: 0, ratingCount: 0, ...c.buyer },
         lastMessage: c.messages.length > 0 ? c.messages[c.messages.length - 1] : null,
         unreadCount: c.unreadCount,
       }));
