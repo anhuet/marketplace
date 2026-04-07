@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Marketplace",
+    "slug": "marketplace",
+    "version": "1.0.0",
+    "scheme": "marketplace",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.marketplace.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F8F9FA"
+      },
+      "package": "com.marketplace.app"
+    },
+    "plugins": [
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Marketplace to use your location to show nearby listings."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Marketplace to access your photos to upload listing images.",
+          "cameraPermission": "Allow Marketplace to use your camera to take listing photos."
+        }
+      ]
+    ]
+  }
+}

@@ -10,20 +10,29 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Auth0 from 'react-native-auth0';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store/authStore';
-import { api } from '../../lib/api';
+import { api, apiClient } from '../../lib/api';
 import PrimaryButton from '../../components/PrimaryButton';
 import FormInput from '../../components/FormInput';
 import { colors, spacing, typography } from '../../theme/tokens';
 import { AuthStackScreenProps } from '../../navigation/types';
+import { User } from '@marketplace/shared';
 
-const auth0Domain: string = Constants.expoConfig?.extra?.auth0Domain ?? '';
-const auth0ClientId: string = Constants.expoConfig?.extra?.auth0ClientId ?? '';
-const auth0 = auth0Domain && auth0ClientId
-  ? new Auth0({ domain: auth0Domain, clientId: auth0ClientId })
-  : null;
+WebBrowser.maybeCompleteAuthSession();
+
+const domain: string = Constants.expoConfig?.extra?.auth0Domain ?? '';
+const clientId: string = Constants.expoConfig?.extra?.auth0ClientId ?? '';
+const audience: string = Constants.expoConfig?.extra?.auth0Audience ?? '';
+
+const discovery = {
+  authorizationEndpoint: `https://${domain}/authorize`,
+  tokenEndpoint: `https://${domain}/oauth/token`,
+};
+
+const redirectUri = AuthSession.makeRedirectUri({ scheme: 'marketplace' });
 
 type Props = AuthStackScreenProps<'Signup'>;
 
@@ -35,6 +44,16 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
   const [error, setError] = useState('');
 
   const setAuth = useAuthStore((s) => s.setAuth);
+
+  const [request, , promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId,
+      redirectUri,
+      scopes: ['openid', 'profile', 'email'],
+      extraParams: { audience, prompt: 'login' },
+    },
+    discovery,
+  );
 
   // Debounced invite code validation — 500 ms after last keystroke
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,8 +93,10 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       setError('Please enter a valid invite code to continue.');
       return;
     }
-    if (!auth0) {
-      setError('Auth0 is not configured. Set EXPO_PUBLIC_AUTH0_DOMAIN and EXPO_PUBLIC_AUTH0_CLIENT_ID in your .env file.');
+    if (!domain || !clientId) {
+      setError(
+        'Auth0 is not configured. Set auth0Domain and auth0ClientId in app.json extra.',
+      );
       return;
     }
 
@@ -87,23 +108,44 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       await api.validateInvite(inviteCode);
 
       // Open Auth0 Universal Login for account creation
-      const credentials = await auth0.webAuth.authorize({
-        scope: 'openid profile email',
-        audience: Constants.expoConfig?.extra?.auth0Audience ?? '',
-        additionalParameters: { prompt: 'login' },
-      });
+      const result = await promptAsync();
 
-      if (!credentials.accessToken) {
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        return;
+      }
+
+      if (result.type !== 'success') {
+        throw new Error('Authentication was not successful. Please try again.');
+      }
+
+      const tokenResponse = await AuthSession.exchangeCodeAsync(
+        {
+          clientId,
+          code: result.params.code,
+          redirectUri,
+          extraParams: { code_verifier: request!.codeVerifier! },
+        },
+        discovery,
+      );
+
+      if (!tokenResponse.accessToken) {
         throw new Error('No access token received from Auth0.');
       }
 
-      // Auto-create DB user record on first call; retrieve profile
-      const { data } = await api.getMe();
+      // Token is not yet in the store — pass it explicitly for this first call.
+      // Auto-creates the DB user record on first call.
+      const meResponse = await apiClient.get<{ user: User }>('/auth/me', {
+        headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+      });
 
       // Redeem the invite code, linking it to the new user account
-      await api.redeemInvite(inviteCode);
+      await apiClient.post(
+        '/auth/redeem-invite',
+        { code: inviteCode },
+        { headers: { Authorization: `Bearer ${tokenResponse.accessToken}` } },
+      );
 
-      setAuth(data.user, credentials.accessToken);
+      setAuth(meResponse.data.user, tokenResponse.accessToken);
 
       // Proceed to profile setup before entering main app
       navigation.navigate('ProfileSetup', { inviteCode });
@@ -174,7 +216,7 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
               label="Continue"
               onPress={handleContinue}
               loading={loading}
-              disabled={!inviteValid}
+              disabled={!inviteValid || !request}
               style={styles.button}
               testID="signup-continue-button"
             />

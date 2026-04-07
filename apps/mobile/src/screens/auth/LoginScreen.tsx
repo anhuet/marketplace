@@ -8,19 +8,28 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Auth0 from 'react-native-auth0';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store/authStore';
-import { api } from '../../lib/api';
+import { apiClient } from '../../lib/api';
 import PrimaryButton from '../../components/PrimaryButton';
 import { colors, spacing, typography } from '../../theme/tokens';
 import { AuthStackScreenProps } from '../../navigation/types';
+import { User } from '@marketplace/shared';
 
-const auth0Domain: string = Constants.expoConfig?.extra?.auth0Domain ?? '';
-const auth0ClientId: string = Constants.expoConfig?.extra?.auth0ClientId ?? '';
-const auth0 = auth0Domain && auth0ClientId
-  ? new Auth0({ domain: auth0Domain, clientId: auth0ClientId })
-  : null;
+WebBrowser.maybeCompleteAuthSession();
+
+const domain: string = Constants.expoConfig?.extra?.auth0Domain ?? '';
+const clientId: string = Constants.expoConfig?.extra?.auth0ClientId ?? '';
+const audience: string = Constants.expoConfig?.extra?.auth0Audience ?? '';
+
+const discovery = {
+  authorizationEndpoint: `https://${domain}/authorize`,
+  tokenEndpoint: `https://${domain}/oauth/token`,
+};
+
+const redirectUri = AuthSession.makeRedirectUri({ scheme: 'marketplace' });
 
 type Props = AuthStackScreenProps<'Login'>;
 
@@ -29,25 +38,61 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
   const [error, setError] = useState('');
   const setAuth = useAuthStore((s) => s.setAuth);
 
+  const [request, , promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId,
+      redirectUri,
+      scopes: ['openid', 'profile', 'email'],
+      extraParams: { audience },
+    },
+    discovery,
+  );
+
+  // Fire when the button is pressed; result arrives via the `response` state
+  // above, but we handle it inline via the resolved promise from promptAsync.
   const handleLogin = async () => {
-    if (!auth0) {
-      setError('Auth0 is not configured. Set EXPO_PUBLIC_AUTH0_DOMAIN and EXPO_PUBLIC_AUTH0_CLIENT_ID in your .env file.');
+    if (!domain || !clientId) {
+      setError(
+        'Auth0 is not configured. Set auth0Domain and auth0ClientId in app.json extra.',
+      );
       return;
     }
+
     setLoading(true);
     setError('');
-    try {
-      const credentials = await auth0.webAuth.authorize({
-        scope: 'openid profile email',
-        audience: Constants.expoConfig?.extra?.auth0Audience ?? '',
-      });
 
-      if (!credentials.accessToken) {
+    try {
+      const result = await promptAsync();
+
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        // User cancelled — not an error
+        return;
+      }
+
+      if (result.type !== 'success') {
+        throw new Error('Authentication was not successful. Please try again.');
+      }
+
+      const tokenResponse = await AuthSession.exchangeCodeAsync(
+        {
+          clientId,
+          code: result.params.code,
+          redirectUri,
+          extraParams: { code_verifier: request!.codeVerifier! },
+        },
+        discovery,
+      );
+
+      if (!tokenResponse.accessToken) {
         throw new Error('No access token received from Auth0.');
       }
 
-      const { data } = await api.getMe();
-      setAuth(data.user, credentials.accessToken);
+      // Token is not yet in the store — pass it explicitly for this first call.
+      const meResponse = await apiClient.get<{ user: User }>('/auth/me', {
+        headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+      });
+
+      setAuth(meResponse.data.user, tokenResponse.accessToken);
       // RootNavigator observes isAuthenticated and transitions to MainTabs automatically
     } catch (err: unknown) {
       const message =
@@ -85,6 +130,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
             label="Sign In"
             onPress={handleLogin}
             loading={loading}
+            disabled={!request}
             style={styles.button}
             testID="login-button"
           />
