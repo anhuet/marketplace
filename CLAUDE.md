@@ -1,13 +1,13 @@
-# [Project Name] — Claude Instructions
+# Marketplace — Claude Instructions
 
-> Stack: [e.g., Next.js 14 · TypeScript · PostgreSQL · Prisma · Railway]
-> Last updated: [YYYY-MM-DD]
+> Stack: React Native (Expo) · Node.js/Express · PostgreSQL (AWS RDS) · AWS
+> Last updated: 2026-03-29
 
 ## Project Context
 
-[2–3 sentences: what this product does, who it serves, and the core problem it solves.]
+Marketplace is a mobile app for iOS and Android that enables users to buy and sell second-hand items. Sellers can list items with photos and descriptions; buyers can discover nearby listings using GPS-based search. Built-in chat lets buyers and sellers communicate directly within the app.
 
-**Tech stack summary**: [Frontend] · [Backend] · [Database] · [Hosting]
+**Tech stack summary**: React Native (Expo) · Node.js/Express · AWS RDS PostgreSQL · Prisma · AWS
 
 ---
 
@@ -51,12 +51,11 @@ These apply to all agents at all times. No exceptions without explicit human ins
 ## Project Structure
 
 ```
-src/                    # Application source code
-  app/                  # [e.g., Next.js App Router pages]
-  components/           # Shared UI components
-  lib/                  # Utilities, helpers, shared logic
-tests/
-  e2e/                  # Playwright E2E tests (*.spec.ts)
+apps/
+  mobile/               # Expo React Native app (iOS & Android)
+  backend/              # Node.js + Express API
+packages/
+  shared/               # Shared TypeScript types
 docs/
   user/USER_GUIDE.md    # User-facing documentation
   technical/            # Architecture, API, DB, decisions
@@ -110,12 +109,10 @@ refactor/<description>
 
 ## Code Style
 
-> Fill in when project tooling is set up.
-
 - **Language**: TypeScript (strict mode)
-- **Formatter**: [Prettier — config in `.prettierrc`]
-- **Linter**: [ESLint — config in `.eslintrc`]
-- **Import style**: [absolute imports from `src/`]
+- **Formatter**: Prettier — config in `.prettierrc`
+- **Linter**: ESLint — config in `.eslintrc`
+- **Import style**: Absolute imports from `src/` (in both mobile and backend apps)
 - **No `console.log`** in production code — use the project logger utility
 - **No commented-out code** committed — delete it or track it in TODO.md
 
@@ -123,29 +120,24 @@ refactor/<description>
 
 ## Testing Conventions
 
-> Fill in when test infrastructure is set up.
+> No tests in v1 — planned for v2.
 
-- **Unit tests**: [Vitest — colocated as `*.test.ts` next to source files]
-- **E2E tests**: [Playwright — in `tests/e2e/*.spec.ts`]
-- **Run unit**: `[npm test]`
-- **Run E2E**: `[npm run test:e2e]`
-- **Coverage target**: 80% for new features
-- E2E tests use Page Object Model pattern and `data-testid` selectors
+- **Unit tests**: [TBD]
+- **E2E tests**: [TBD]
+- **Coverage target**: [TBD]
 
 ---
 
 ## Environment & Commands
 
-> Fill in when project is initialized.
-
-- **Node**: [x.x.x] (see `.nvmrc`)
-- **Package manager**: [npm / pnpm / yarn]
-- `[npm run dev]` — start dev server
-- `[npm run build]` — production build
-- `[npm test]` — unit tests
-- `[npm run test:e2e]` — E2E tests
-- `[npm run lint]` — lint check
-- `[npm run typecheck]` — TypeScript check
+- **Node**: Latest LTS (see `.nvmrc`)
+- **Package manager**: yarn
+- `yarn workspace mobile start` — start Expo dev server
+- `yarn workspace backend dev` — start backend dev server
+- `yarn workspace mobile build:ios` — build iOS app
+- `yarn workspace mobile build:android` — build Android app
+- `yarn lint` — lint check
+- `yarn typecheck` — TypeScript check
 
 ---
 

@@ -13,18 +13,15 @@ _(nothing in progress)_
 
 ## Up Next (prioritized)
 
-_(nothing up next)_
+- [ ] #021 — Provision AWS EC2 + RDS PostgreSQL infrastructure [area: infra] → [.tasks/021-ec2-rds-provision.md](.tasks/021-ec2-rds-provision.md)
+- [ ] #022 — Deploy backend application to EC2 and run Prisma migrations [area: backend] → [.tasks/022-deploy-backend-ec2.md](.tasks/022-deploy-backend-ec2.md)
+- [ ] #023 — Record ADR-005: EC2 + RDS over ECS Fargate for backend compute [area: docs] → [.tasks/023-adr-ec2-rds.md](.tasks/023-adr-ec2-rds.md)
 
 ---
 
 ## Backlog
 
-- [ ] #014 — Build listing browse screen: GPS-filtered list, distance display, search/filter UI [area: mobile] → [.tasks/014-listing-browse-screen.md](.tasks/014-listing-browse-screen.md)
-- [ ] #015 — Build listing detail screen: photos, description, price, seller info, "Message Seller" button [area: mobile] → [.tasks/015-listing-detail-screen.md](.tasks/015-listing-detail-screen.md)
-- [ ] #016 — Build post listing screen: form with photos, description, price, category, GPS capture [area: mobile] → [.tasks/016-post-listing-screen.md](.tasks/016-post-listing-screen.md)
-- [ ] #017 — Build chat screens: conversation list, individual chat with real-time messages [area: mobile] → [.tasks/017-chat-screens.md](.tasks/017-chat-screens.md)
-- [ ] #018 — Build user profile screen: avatar, listings, ratings, reviews, settings [area: mobile] → [.tasks/018-user-profile-screen.md](.tasks/018-user-profile-screen.md)
-- [ ] #019 — Integrate push notifications in mobile: register Expo push token, handle notification taps [area: mobile] → [.tasks/019-push-notifications-mobile.md](.tasks/019-push-notifications-mobile.md)
+_(nothing in backlog)_
 
 ---
 
@@ -44,6 +41,12 @@ _(nothing up next)_
 - [x] #011 — Design UX flows: auth screens, listing browse/detail, chat, profile, post listing [area: design] → [.tasks/011-ux-design-flows.md](.tasks/011-ux-design-flows.md)
 - [x] #012 — Build Expo mobile app scaffold: navigation structure (React Navigation), Zustand store, API client, Socket.io client [area: mobile] → [.tasks/012-mobile-app-scaffold.md](.tasks/012-mobile-app-scaffold.md)
 - [x] #013 — Build auth screens: signup (with invite code field), login, logout [area: mobile] → [.tasks/013-auth-screens.md](.tasks/013-auth-screens.md)
+- [x] #014 — Build listing browse screen: GPS-filtered list, distance display, search/filter UI [area: mobile] → [.tasks/014-listing-browse-screen.md](.tasks/014-listing-browse-screen.md)
+- [x] #015 — Build listing detail screen: photos, description, price, seller info, "Message Seller" button [area: mobile] → [.tasks/015-listing-detail-screen.md](.tasks/015-listing-detail-screen.md)
+- [x] #016 — Build post listing screen: form with photos, description, price, category, GPS capture [area: mobile] → [.tasks/016-post-listing-screen.md](.tasks/016-post-listing-screen.md)
+- [x] #017 — Build chat screens: conversation list, individual chat with real-time messages [area: mobile] → [.tasks/017-chat-screens.md](.tasks/017-chat-screens.md)
+- [x] #018 — Build user profile screen: avatar, listings, ratings, reviews, settings [area: mobile] → [.tasks/018-user-profile-screen.md](.tasks/018-user-profile-screen.md)
+- [x] #019 — Integrate push notifications in mobile: register Expo push token, handle notification taps [area: mobile] → [.tasks/019-push-notifications-mobile.md](.tasks/019-push-notifications-mobile.md)
 - [x] #020 — Set up AWS RDS PostgreSQL and deploy backend to AWS EC2/ECS [area: infra] → [.tasks/020-aws-infrastructure.md](.tasks/020-aws-infrastructure.md)
 
 ---

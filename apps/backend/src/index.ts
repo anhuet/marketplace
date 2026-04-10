@@ -1,6 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Construct DATABASE_URL from individual Secrets Manager env vars if not already set
+if (!process.env.DATABASE_URL && process.env.DB_HOST) {
+  process.env.DATABASE_URL = `postgresql://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT ?? 5432}/${process.env.DB_NAME}`;
+}
+
 import http from 'http';
 import express from 'express';
 import cors from 'cors';

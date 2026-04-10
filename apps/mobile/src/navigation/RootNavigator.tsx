@@ -28,7 +28,7 @@ export default function RootNavigator(): React.JSX.Element {
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
   useEffect(() => {
-    if (isAuthenticated && token) {
+    if (isAuthenticated && token && token !== 'dev-token') {
       connectSocket(token);
     } else {
       disconnectSocket();

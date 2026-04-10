@@ -31,6 +31,21 @@ const discovery = {
 
 const redirectUri = AuthSession.makeRedirectUri({ scheme: 'marketplace' });
 
+// DEV ONLY — mock user for UI preview without a running backend
+const DEV_BYPASS = false;
+const DEV_MOCK_USER: User = {
+  id: 'dev-user-001',
+  auth0Id: 'auth0|dev',
+  email: 'dev@marketplace.app',
+  displayName: 'Dev User',
+  avatarUrl: null,
+  bio: null,
+  averageRating: 4.5,
+  ratingCount: 12,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
 type Props = AuthStackScreenProps<'Login'>;
 
 export default function LoginScreen({ navigation }: Props): React.JSX.Element {
@@ -51,10 +66,12 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
   // Fire when the button is pressed; result arrives via the `response` state
   // above, but we handle it inline via the resolved promise from promptAsync.
   const handleLogin = async () => {
+    if (DEV_BYPASS) {
+      setAuth(DEV_MOCK_USER, 'dev-token');
+      return;
+    }
     if (!domain || !clientId) {
-      setError(
-        'Auth0 is not configured. Set auth0Domain and auth0ClientId in app.json extra.',
-      );
+      setError('Auth0 is not configured. Set auth0Domain and auth0ClientId in app.json extra.');
       return;
     }
 
@@ -95,8 +112,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
       setAuth(meResponse.data.user, tokenResponse.accessToken);
       // RootNavigator observes isAuthenticated and transitions to MainTabs automatically
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Login failed. Please try again.';
+      const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       setError(message);
     } finally {
       setLoading(false);
@@ -109,10 +125,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to your Marketplace account.</Text>
 
@@ -130,7 +143,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
             label="Sign In"
             onPress={handleLogin}
             loading={loading}
-            disabled={!request}
+            disabled={!DEV_BYPASS && !request}
             style={styles.button}
             testID="login-button"
           />
