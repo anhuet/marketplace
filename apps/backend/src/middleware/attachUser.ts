@@ -15,7 +15,7 @@ declare module 'express-serve-static-core' {
  */
 async function fetchAuth0UserInfo(accessToken: string): Promise<{ email: string; name: string }> {
   const domain = process.env.AUTH0_DOMAIN ?? '';
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const options = {
       hostname: domain,
       path: '/userinfo',
