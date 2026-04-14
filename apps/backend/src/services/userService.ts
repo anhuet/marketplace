@@ -8,14 +8,28 @@ export async function findOrCreateUser(
   displayName?: string,
 ): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { auth0Id } });
-  if (existing) return existing;
+
+  // If user exists but has empty email/displayName (created before /userinfo fix), update them
+  if (existing) {
+    const needsUpdate = (!existing.email && email) || (!existing.displayName && displayName);
+    if (needsUpdate) {
+      return prisma.user.update({
+        where: { auth0Id },
+        data: {
+          ...(email && !existing.email ? { email } : {}),
+          ...(displayName && !existing.displayName ? { displayName } : {}),
+        },
+      });
+    }
+    return existing;
+  }
 
   // Create the user record
   const user = await prisma.user.create({
     data: {
       auth0Id,
       email,
-      displayName: displayName ?? email.split('@')[0],
+      displayName: displayName ?? (email ? email.split('@')[0] : auth0Id.split('|')[1] ?? 'User'),
     },
   });
 
