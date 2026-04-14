@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -32,6 +32,15 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [avatarUri, setAvatarUri] = useState<string | null>(user?.avatarUrl ?? null);
   const [bio, setBio] = useState(user?.bio ?? '');
+
+  // Sync fields if user loads from store after mount (AsyncStorage rehydration)
+  useEffect(() => {
+    if (user) {
+      setDisplayName((prev) => (prev === '' ? (user.displayName ?? '') : prev));
+      setAvatarUri((prev) => (prev === null ? (user.avatarUrl ?? null) : prev));
+      setBio((prev) => (prev === '' ? (user.bio ?? '') : prev));
+    }
+  }, [user]);
 
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);

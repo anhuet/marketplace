@@ -116,6 +116,12 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 
+// Request logger
+app.use((req, _res, next) => {
+  process.stdout.write(`[${new Date().toISOString()}] ${req.method} ${req.path}\n`);
+  next();
+});
+
 // Routes
 app.use('/api/v1', router);
 

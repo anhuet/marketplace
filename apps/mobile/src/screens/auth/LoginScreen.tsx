@@ -109,11 +109,15 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
         headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
       });
 
+      if (!meResponse.data.user) {
+        throw new Error(`/auth/me returned no user. Response: ${JSON.stringify(meResponse.data)}`);
+      }
+
       setAuth(meResponse.data.user, tokenResponse.accessToken);
       // RootNavigator observes isAuthenticated and transitions to MainTabs automatically
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
-      setError(message);
+      setError(`DEBUG: ${message}`);
     } finally {
       setLoading(false);
     }
