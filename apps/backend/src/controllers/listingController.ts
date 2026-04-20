@@ -8,6 +8,7 @@ import {
   softDeleteListing,
   updateListingStatus,
   getSellerListings,
+  getListingBuyers,
 } from '../services/listingService';
 import { uploadImageToS3 } from '../lib/s3';
 import { Condition, ListingStatus } from '@prisma/client';
@@ -43,6 +44,7 @@ const updateListingSchema = createListingSchema.partial();
 
 const statusSchema = z.object({
   status: z.enum(['SOLD']),
+  buyerId: z.string().uuid().optional(),
 });
 
 async function processUploadedImages(req: Request): Promise<string[]> {
@@ -159,10 +161,25 @@ export async function updateListingStatusHandler(
       req.params.id,
       req.dbUser!.id,
       parsed.data.status as ListingStatus,
+      parsed.data.buyerId,
     ).catch(handleOwnershipError);
 
     if (!result) throw new AppError(404, 'NOT_FOUND', 'Listing not found');
     res.json({ listing: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getListingBuyersHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const buyers = await getListingBuyers(req.params.id, req.dbUser!.id).catch(handleOwnershipError);
+    if (buyers === null) throw new AppError(404, 'NOT_FOUND', 'Listing not found');
+    res.json({ buyers });
   } catch (err) {
     next(err);
   }

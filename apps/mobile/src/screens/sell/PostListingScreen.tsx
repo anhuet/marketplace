@@ -21,6 +21,7 @@ import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { api } from '../../lib/api';
+import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import FormInput from '../../components/FormInput';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -83,6 +84,7 @@ type ListingFormValues = z.infer<typeof listingSchema>;
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PostListingScreen({ route, navigation }: Props): React.JSX.Element {
+  const { user } = useAuthStore();
   const listingId = route?.params?.listingId;
   const isEditMode = Boolean(listingId);
 
@@ -107,6 +109,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     control,
     handleSubmit,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<ListingFormValues>({
     resolver: zodResolver(listingSchema),
@@ -169,6 +172,10 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       .getListing(listingId)
       .then((res) => {
         const listing: ListingWithDetails = res.data.listing;
+        if (listing.sellerId !== user?.id) {
+          setApiError('You do not have permission to edit this listing.');
+          return;
+        }
         setValue('title', listing.title);
         setValue('description', listing.description);
         setValue('price', listing.price);
@@ -319,12 +326,10 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
           }
         });
 
-        const res = await api.updateListing(listingId, formData);
-        const updatedId: string = res.data.listing.id;
-        navigation.goBack();
-        // Navigate to detail screen — parent navigator handles this
-        // Using goBack is safe here as the SellStack root is PostListing
-        void updatedId;
+        await api.updateListing(listingId, formData);
+        Alert.alert('Success', 'Your listing has been updated.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
       } else {
         // Create mode: POST with FormData
         const formData = new FormData();
@@ -345,7 +350,11 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         });
 
         await api.createListing(formData);
-        navigation.goBack();
+        reset();
+        setPhotos([]);
+        Alert.alert('Listing Posted!', 'Your listing is now live.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
       }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: { message?: string } }; status?: number } };

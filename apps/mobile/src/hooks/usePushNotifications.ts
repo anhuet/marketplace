@@ -4,22 +4,31 @@ import * as Notifications from 'expo-notifications';
 import { NavigationContainerRef } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useAuthStore } from '../store/authStore';
+import { useNotificationStore } from '../store/notificationStore';
 import { api } from '../lib/api';
 
 // Configure foreground notification behaviour — show banner + play sound while app is open
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    // Increment unread notification count for foreground notifications
+    const data = notification.request.content.data as NotificationPayload | undefined;
+    if (data?.type) {
+      useNotificationStore.getState().incrementUnread();
+    }
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 type NotificationPayload = {
-  type: 'new_message' | 'new_inquiry';
+  type: 'new_message' | 'new_inquiry' | 'new_review';
   conversationId?: string;
   listingId?: string;
   listingTitle?: string;
+  revieweeId?: string;
 };
 
 /**
@@ -70,6 +79,14 @@ function handleNotificationNavigation(
         params: { screen: 'ConversationList' },
       });
     }
+    return;
+  }
+
+  if (data.type === 'new_review') {
+    navigate('Main', {
+      screen: 'ProfileTab',
+      params: { screen: 'Profile' },
+    });
   }
 }
 

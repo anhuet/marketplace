@@ -44,6 +44,7 @@ export interface Listing {
   longitude: number;
   categoryId: string;
   sellerId: string;
+  buyerId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,6 +108,18 @@ export interface Review {
 
 export interface ReviewWithDetails extends Review {
   reviewer: PublicUser;
+}
+
+// Saved listing types
+export interface SavedListing {
+  id: string;
+  userId: string;
+  listingId: string;
+  createdAt: string;
+}
+
+export interface SavedListingWithDetails extends SavedListing {
+  listing: ListingWithDetails;
 }
 
 // Push token types

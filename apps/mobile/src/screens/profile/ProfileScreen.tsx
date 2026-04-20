@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,16 +13,16 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 
 import { api } from '../../lib/api';
-import { unregisterPushToken } from '../../hooks/usePushNotifications';
+import { logout } from '../../lib/auth';
 import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import StarRating from '../../components/StarRating';
-import ListingCard from '../../components/ListingCard';
 import type { ProfileStackScreenProps } from '../../navigation/types';
-import type { ListingWithDetails, ReviewWithDetails } from '@marketplace/shared';
+import type { ReviewWithDetails } from '@marketplace/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,12 +45,7 @@ function formatDate(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen({ navigation }: Props): React.JSX.Element {
-  const { user, clearAuth, pushToken } = useAuthStore();
-
-  // Listings
-  const [listings, setListings] = useState<ListingWithDetails[]>([]);
-  const [listingsLoading, setListingsLoading] = useState(true);
-  const [listingsError, setListingsError] = useState<string | null>(null);
+  const { user, pushToken } = useAuthStore();
 
   // Reviews
   const [reviews, setReviews] = useState<ReviewWithDetails[]>([]);
@@ -70,20 +65,6 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
   const [pushToggling, setPushToggling] = useState(false);
 
   // ── Data fetching ────────────────────────────────────────────────────────
-
-  const loadListings = useCallback(async () => {
-    if (!user?.id) return;
-    setListingsLoading(true);
-    setListingsError(null);
-    try {
-      const res = await api.getSellerListings(user.id);
-      setListings(res.data.listings ?? []);
-    } catch {
-      setListingsError('Could not load listings. Pull down to retry.');
-    } finally {
-      setListingsLoading(false);
-    }
-  }, [user?.id]);
 
   const loadReviews = useCallback(
     async (page: number, append = false) => {
@@ -122,11 +103,18 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
     }
   }, []);
 
-  useEffect(() => {
-    loadListings();
-    loadReviews(1);
-    loadInviteCode();
-  }, [loadListings, loadReviews, loadInviteCode]);
+  const hasLoadedOnce = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoadedOnce.current) {
+        // First focus: also load invite code (static, only need once)
+        loadInviteCode();
+        hasLoadedOnce.current = true;
+      }
+      loadReviews(1);
+    }, [loadReviews, loadInviteCode]),
+  );
 
   // ── Invite copy ──────────────────────────────────────────────────────────
 
@@ -182,23 +170,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: async () => {
-          // Best-effort deregister — proceed with logout regardless of network failure
-          await unregisterPushToken();
-          clearAuth();
-        },
+        onPress: () => logout(),
       },
     ]);
-  }, [clearAuth]);
-
-  // ── Listing press ────────────────────────────────────────────────────────
-
-  const handleListingPress = useCallback(
-    (listing: ListingWithDetails) => {
-      navigation.navigate('ListingDetail', { listingId: listing.id });
-    },
-    [navigation],
-  );
+  }, []);
 
   // ── Reviews load more ────────────────────────────────────────────────────
 
@@ -241,16 +216,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
     [],
   );
 
-  const renderListingItem = useCallback(
-    ({ item }: { item: ListingWithDetails }) => (
-      <View style={styles.listingCardWrapper}>
-        <ListingCard listing={item} onPress={handleListingPress} />
-      </View>
-    ),
-    [handleListingPress],
-  );
-
-  // ── Profile header (shared between sections) ─────────────────────────────
+  // ── Profile header ───────────────────────────────────────────────────────
 
   const avatarUri = user?.avatarUrl;
 
@@ -336,31 +302,17 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
         )}
       </View>
 
-      {/* ── Listings section header ── */}
-      <Text style={styles.sectionTitle} accessibilityRole="header">
-        My Listings
-      </Text>
-      {listingsLoading ? (
-        <ActivityIndicator
-          size="small"
-          color={colors.primaryDark}
-          style={styles.inlineLoader}
-          accessibilityLabel="Loading listings"
-        />
-      ) : listingsError ? (
-        <View style={styles.errorRow}>
-          <Text style={styles.errorText}>{listingsError}</Text>
-          <TouchableOpacity
-            onPress={loadListings}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading listings"
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : listings.length === 0 ? (
-        <Text style={styles.emptyText}>You have no listings yet.</Text>
-      ) : null}
+      {/* ── My Listings shortcut ── */}
+      <TouchableOpacity
+        style={styles.menuRow}
+        onPress={() => navigation.navigate('MyListings')}
+        accessibilityRole="button"
+        accessibilityLabel="My Listings"
+        accessibilityHint="Opens your listings to view, edit, or manage them"
+      >
+        <Text style={styles.menuRowLabel}>My Listings</Text>
+        <Text style={styles.menuRowChevron}>›</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -454,12 +406,11 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <FlatList
-        data={listingsLoading || listingsError || listings.length === 0 ? [] : listings}
-        keyExtractor={(item) => item.id}
-        renderItem={renderListingItem}
+        data={[]}
+        keyExtractor={() => ''}
+        renderItem={null}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        numColumns={1}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         accessibilityLabel="Profile screen"
@@ -604,9 +555,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Listing card wrapper
-  listingCardWrapper: {
-    paddingHorizontal: 0,
+  // Menu row (My Listings shortcut)
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.base,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  menuRowLabel: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  menuRowChevron: {
+    fontSize: 22,
+    color: colors.textSecondary,
+    lineHeight: 26,
   },
 
   // Reviews

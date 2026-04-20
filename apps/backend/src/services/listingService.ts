@@ -48,7 +48,15 @@ async function presignListingImages<
   T extends { images: { id: string; url: string; order: number }[] },
 >(listing: T): Promise<T> {
   const images = await Promise.all(
-    listing.images.map(async (img) => ({ ...img, url: await getPresignedUrl(img.url) })),
+    listing.images.map(async (img) => {
+      let url = img.url;
+      try {
+        url = await getPresignedUrl(img.url);
+      } catch {
+        // fall back to stored URL if presigning fails
+      }
+      return { ...img, url };
+    }),
   );
   return { ...listing, images };
 }
@@ -124,15 +132,33 @@ export async function softDeleteListing(id: string, sellerId: string) {
   });
 }
 
-export async function updateListingStatus(id: string, sellerId: string, status: ListingStatus) {
+export async function updateListingStatus(id: string, sellerId: string, status: ListingStatus, buyerId?: string) {
   const listing = await prisma.listing.findUnique({ where: { id } });
   if (!listing || listing.status === ListingStatus.DELETED) return null;
   if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
 
   return prisma.listing.update({
     where: { id },
-    data: { status },
+    data: { status, ...(buyerId !== undefined && { buyerId }) },
   });
+}
+
+export async function getListingBuyers(listingId: string, sellerId: string) {
+  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+  if (!listing || listing.status === ListingStatus.DELETED) return null;
+  if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
+
+  const conversations = await prisma.conversation.findMany({
+    where: { listingId },
+    include: {
+      buyer: {
+        select: { id: true, displayName: true, avatarUrl: true },
+      },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  return conversations.map((c) => c.buyer);
 }
 
 export async function getSellerListings(sellerId: string) {

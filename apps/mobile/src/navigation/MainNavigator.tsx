@@ -13,11 +13,11 @@ import {
   ProfileStackParamList,
 } from './types';
 import { colors, spacing } from '../theme/tokens';
+import { useChatStore } from '../store/chatStore';
 
 import BrowseScreen from '../screens/browse/BrowseScreen';
 import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
 import PostListingScreen from '../screens/sell/PostListingScreen';
-import SavedScreen from '../screens/saved/SavedScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ConversationListScreen from '../screens/chat/ConversationListScreen';
@@ -25,12 +25,14 @@ import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
 import UserProfileScreen from '../screens/profile/UserProfileScreen';
 import MyListingsScreen from '../screens/profile/MyListingsScreen';
+import WriteReviewScreen from '../screens/profile/WriteReviewScreen';
+import SavedScreen from '../screens/saved/SavedScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const BrowseStack = createNativeStackNavigator<BrowseStackParamList>();
 const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 const SellStack = createNativeStackNavigator<SellStackParamList>();
-const SavedStack = createNativeStackNavigator<SavedStackParamList>();
+const SavedStackNav = createNativeStackNavigator<SavedStackParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -44,6 +46,12 @@ function BrowseNavigator() {
         name="ChatThread"
         component={ChatThreadScreen}
         options={({ route }) => ({ title: route.params.listingTitle })}
+      />
+      <BrowseStack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
+      <BrowseStack.Screen
+        name="WriteReview"
+        component={WriteReviewScreen}
+        options={{ title: 'Write a Review' }}
       />
     </BrowseStack.Navigator>
   );
@@ -72,10 +80,11 @@ function SellNavigator() {
 
 function SavedNavigator() {
   return (
-    <SavedStack.Navigator>
-      <SavedStack.Screen name="Saved" component={SavedScreen} options={{ headerShown: false }} />
-      <SavedStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
-    </SavedStack.Navigator>
+    <SavedStackNav.Navigator>
+      <SavedStackNav.Screen name="Saved" component={SavedScreen} options={{ headerShown: false }} />
+      <SavedStackNav.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
+      <SavedStackNav.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
+    </SavedStackNav.Navigator>
   );
 }
 
@@ -94,6 +103,11 @@ function ProfileNavigator() {
       <ProfileStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
       <ProfileStack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
       <ProfileStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
+      <ProfileStack.Screen
+        name="WriteReview"
+        component={WriteReviewScreen}
+        options={{ title: 'Write a Review' }}
+      />
     </ProfileStack.Navigator>
   );
 }
@@ -113,12 +127,25 @@ function HomeIcon({ focused }: { focused: boolean }) {
 }
 
 function MessagesIcon({ focused }: { focused: boolean }) {
+  const totalUnread = useChatStore((s) =>
+    s.conversations.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0),
+  );
+
   return (
-    <Ionicons
-      name={focused ? 'chatbubble' : 'chatbubble-outline'}
-      size={TAB_ICON_SIZE}
-      color={focused ? colors.primaryDark : colors.secondary}
-    />
+    <View>
+      <Ionicons
+        name={focused ? 'chatbubble' : 'chatbubble-outline'}
+        size={TAB_ICON_SIZE}
+        color={focused ? colors.primaryDark : colors.secondary}
+      />
+      {totalUnread > 0 && (
+        <View style={badgeStyles.container}>
+          <Text style={badgeStyles.text}>
+            {totalUnread > 99 ? '99+' : totalUnread}
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -275,6 +302,29 @@ const tabBarStyles = StyleSheet.create({
   },
 });
 
+const badgeStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: colors.error,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  text: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
+});
+
 // ─── Main navigator ───────────────────────────────────────────────────────────
 
 export default function MainNavigator(): React.JSX.Element {
@@ -292,11 +342,11 @@ export default function MainNavigator(): React.JSX.Element {
         }}
       />
       <Tab.Screen
-        name="MessagesTab"
-        component={MessagesNavigator}
+        name="SavedTab"
+        component={SavedNavigator}
         options={{
-          title: 'MESSAGES',
-          tabBarIcon: ({ focused }) => <MessagesIcon focused={focused} />,
+          title: 'SAVED',
+          tabBarIcon: ({ focused }) => <SavedIcon focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -305,11 +355,11 @@ export default function MainNavigator(): React.JSX.Element {
         options={{ title: 'SELL' }}
       />
       <Tab.Screen
-        name="SavedTab"
-        component={SavedNavigator}
+        name="MessagesTab"
+        component={MessagesNavigator}
         options={{
-          title: 'SAVED',
-          tabBarIcon: ({ focused }) => <SavedIcon focused={focused} />,
+          title: 'MESSAGES',
+          tabBarIcon: ({ focused }) => <MessagesIcon focused={focused} />,
         }}
       />
       <Tab.Screen

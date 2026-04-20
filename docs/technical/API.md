@@ -442,7 +442,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### PATCH /api/v1/listings/:id/status
 
 **Auth required**: Yes
-**Description**: Updates the status of a listing. Currently supports transitioning to `SOLD` only. Only the listing owner may call this endpoint.
+**Description**: Updates the status of a listing. Currently supports transitioning to `SOLD` only. Optionally records which buyer purchased the item via `buyerId`. Only the listing owner may call this endpoint.
 
 **Path parameters**:
 - `id` — listing UUID
@@ -450,7 +450,8 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 **Request body**:
 ```json
 {
-  "status": "SOLD"
+  "status": "SOLD",
+  "buyerId": "string | undefined — optional UUID of the buyer who purchased the item"
 }
 ```
 
@@ -466,7 +467,35 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ```
 
 **Error codes**:
-- `400` — Validation error (invalid or unsupported status value)
+- `400` — Validation error (invalid or unsupported status value, buyerId not a valid UUID)
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Authenticated user is not the listing owner
+- `404` — Listing not found or soft-deleted
+
+---
+
+### GET /api/v1/listings/:id/buyers
+
+**Auth required**: Yes
+**Description**: Returns the list of users who have started a conversation on the specified listing, ordered by most recently active conversation first. Only the listing owner may call this endpoint. Used to populate the buyer selection UI when marking a listing as sold.
+
+**Path parameters**:
+- `id` — listing UUID
+
+**Response 200**:
+```json
+{
+  "buyers": [
+    {
+      "id": "string — UUID",
+      "displayName": "string",
+      "avatarUrl": "string | null"
+    }
+  ]
+}
+```
+
+**Error codes**:
 - `401` — Missing or invalid Auth0 Bearer token
 - `403` — Authenticated user is not the listing owner
 - `404` — Listing not found or soft-deleted

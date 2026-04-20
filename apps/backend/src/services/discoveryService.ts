@@ -48,8 +48,10 @@ export async function getNearbyListings(input: NearbyListingsInput): Promise<{
   const offset = (page - 1) * limit;
 
   // Build optional filter fragments
+  // Cast the uuid column to text for comparison, since Prisma parameterises
+  // the JS string value as text and PostgreSQL won't implicitly cast text→uuid.
   const categoryFilter = categoryId
-    ? Prisma.sql`AND l.category_id = ${categoryId}::uuid`
+    ? Prisma.sql`AND l.category_id::text = ${categoryId}`
     : Prisma.empty;
 
   const keywordFilter = q
@@ -123,10 +125,17 @@ export async function getNearbyListings(input: NearbyListingsInput): Promise<{
   `;
 
   const listings = await Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      coverImageUrl: row.coverImageUrl ? await getPresignedUrl(row.coverImageUrl) : null,
-    })),
+    rows.map(async (row) => {
+      let coverImageUrl: string | null = null;
+      if (row.coverImageUrl) {
+        try {
+          coverImageUrl = await getPresignedUrl(row.coverImageUrl);
+        } catch {
+          coverImageUrl = row.coverImageUrl;
+        }
+      }
+      return { ...row, coverImageUrl };
+    }),
   );
 
   return {

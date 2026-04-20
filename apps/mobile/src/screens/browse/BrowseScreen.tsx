@@ -7,11 +7,14 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
+  Image,
   Linking,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,19 +22,22 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { ListingWithDetails, Category } from '@marketplace/shared';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../lib/api';
-import ListingCard from '../../components/ListingCard';
 import { useLocationStore } from '../../store/locationStore';
+import { useNotificationStore } from '../../store/notificationStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { BrowseStackScreenProps } from '../../navigation/types';
 
 // -----------------------------------------------------------------
-// Types
+// Types & constants
 // -----------------------------------------------------------------
 
 type Props = BrowseStackScreenProps<'Browse'>;
+type ViewMode = 'grid' | 'feed';
 
 interface NearbyListingsResponse {
   listings: ListingWithDetails[];
@@ -45,25 +51,328 @@ interface CategoriesResponse {
   categories: Category[];
 }
 
-// -----------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------
-
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_LIMIT = 20;
-const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = 400;
 const DEFAULT_RADIUS_KM = 10;
 const RADIUS_OPTIONS = [5, 10, 25, 50, 100];
 
+// Grid: 3 columns with gaps
+const GRID_COLUMNS = 3;
+const GRID_GAP = spacing.xs;
+const GRID_PADDING = spacing.sm;
+const GRID_ITEM_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+const GRID_ITEM_HEIGHT = GRID_ITEM_WIDTH * 1.25;
+
 // -----------------------------------------------------------------
-// Component
+// Helpers
+// -----------------------------------------------------------------
+
+function formatPrice(price: string): string {
+  const n = parseFloat(price);
+  if (isNaN(n)) return price;
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(0)}`;
+}
+
+function formatDistance(km: number | undefined): string {
+  if (km === undefined || km === null) return '';
+  if (km < 1) return `${Math.round(km * 1000)}m`;
+  return `${km.toFixed(1)}km`;
+}
+
+// -----------------------------------------------------------------
+// Grid item
+// -----------------------------------------------------------------
+
+function GridItem({
+  listing,
+  onPress,
+}: {
+  listing: ListingWithDetails;
+  onPress: (listing: ListingWithDetails) => void;
+}) {
+  const coverUrl =
+    (listing as { coverImageUrl?: string }).coverImageUrl ??
+    listing.images?.[0]?.url;
+
+  return (
+    <TouchableOpacity
+      style={gridStyles.item}
+      onPress={() => onPress(listing)}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={listing.title}
+    >
+      {coverUrl ? (
+        <Image source={{ uri: coverUrl }} style={gridStyles.image} resizeMode="cover" />
+      ) : (
+        <View style={[gridStyles.image, gridStyles.imageFallback]}>
+          <Text style={gridStyles.imageFallbackText}>No photo</Text>
+        </View>
+      )}
+
+      {/* Price badge — bottom left */}
+      <View style={gridStyles.priceBadge}>
+        <Text style={gridStyles.priceText}>{formatPrice(listing.price)}</Text>
+      </View>
+
+      {/* Distance badge — bottom right */}
+      {listing.distanceKm !== undefined && (
+        <View style={gridStyles.distanceBadge}>
+          <Text style={gridStyles.distanceText}>{formatDistance(listing.distanceKm)}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+const gridStyles = StyleSheet.create({
+  item: {
+    width: GRID_ITEM_WIDTH,
+    height: GRID_ITEM_HEIGHT,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.border,
+    position: 'relative',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  imageFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageFallbackText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  priceBadge: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    left: spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+  },
+  priceText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 14,
+  },
+  distanceBadge: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+  },
+  distanceText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    lineHeight: 14,
+  },
+});
+
+// -----------------------------------------------------------------
+// Feed item (full-width card)
+// -----------------------------------------------------------------
+
+function FeedItem({
+  listing,
+  onPress,
+}: {
+  listing: ListingWithDetails;
+  onPress: (listing: ListingWithDetails) => void;
+}) {
+  const coverUrl =
+    (listing as { coverImageUrl?: string }).coverImageUrl ??
+    listing.images?.[0]?.url;
+
+  return (
+    <TouchableOpacity
+      style={feedStyles.card}
+      onPress={() => onPress(listing)}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={listing.title}
+    >
+      {coverUrl ? (
+        <Image source={{ uri: coverUrl }} style={feedStyles.image} resizeMode="cover" />
+      ) : (
+        <View style={[feedStyles.image, feedStyles.imageFallback]}>
+          <Text style={feedStyles.imageFallbackText}>No photo</Text>
+        </View>
+      )}
+      <View style={feedStyles.info}>
+        <Text style={feedStyles.title} numberOfLines={2}>{listing.title}</Text>
+        <View style={feedStyles.meta}>
+          <Text style={feedStyles.price}>
+            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(parseFloat(listing.price))}
+          </Text>
+          {listing.distanceKm !== undefined && (
+            <Text style={feedStyles.distance}>{formatDistance(listing.distanceKm)}</Text>
+          )}
+        </View>
+        {listing.category && (
+          <Text style={feedStyles.category}>{listing.category.name}</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const feedStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  image: {
+    width: 100,
+    height: 100,
+    backgroundColor: colors.border,
+  },
+  imageFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageFallbackText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  info: {
+    flex: 1,
+    padding: spacing.md,
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  title: {
+    ...typography.label,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  price: {
+    ...typography.label,
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+  distance: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  category: {
+    ...typography.caption,
+    color: colors.tertiary,
+  },
+});
+
+// -----------------------------------------------------------------
+// Nearby card (horizontal scroll)
+// -----------------------------------------------------------------
+
+const NEARBY_CARD_WIDTH = 140;
+const NEARBY_CARD_HEIGHT = 100;
+
+function NearbyCard({
+  listing,
+  onPress,
+}: {
+  listing: ListingWithDetails;
+  onPress: (listing: ListingWithDetails) => void;
+}) {
+  const coverUrl =
+    (listing as { coverImageUrl?: string }).coverImageUrl ??
+    listing.images?.[0]?.url;
+
+  return (
+    <TouchableOpacity
+      style={nearbyStyles.card}
+      onPress={() => onPress(listing)}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={listing.title}
+    >
+      {coverUrl ? (
+        <Image source={{ uri: coverUrl }} style={nearbyStyles.image} resizeMode="cover" />
+      ) : (
+        <View style={[nearbyStyles.image, nearbyStyles.imageFallback]} />
+      )}
+      <View style={nearbyStyles.overlay}>
+        <Text style={nearbyStyles.name} numberOfLines={2}>{listing.title}</Text>
+        {listing.distanceKm !== undefined && (
+          <Text style={nearbyStyles.distance}>{formatDistance(listing.distanceKm)}</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const nearbyStyles = StyleSheet.create({
+  card: {
+    width: NEARBY_CARD_WIDTH,
+    height: NEARBY_CARD_HEIGHT,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.border,
+    marginRight: spacing.sm,
+  },
+  image: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  imageFallback: {
+    backgroundColor: colors.primary,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    padding: spacing.sm,
+    justifyContent: 'flex-end',
+  },
+  name: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 14,
+  },
+  distance: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+});
+
+// -----------------------------------------------------------------
+// Main component
 // -----------------------------------------------------------------
 
 export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const notificationUnread = useNotificationStore((s) => s.unreadCount);
+  const clearNotifications = useNotificationStore((s) => s.clearUnread);
 
   // Location
   const { lastKnownLocation, setLastKnownLocation } = useLocationStore();
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
+
+  // View mode
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,17 +393,13 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Debounce ref for search input
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // -----------------------------------------------------------------
   // Location
   // -----------------------------------------------------------------
 
-  const requestLocation = useCallback(async (): Promise<{
-    latitude: number;
-    longitude: number;
-  } | null> => {
+  const requestLocation = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -102,13 +407,8 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
         return null;
       }
       setLocationPermissionDenied(false);
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const coords = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      };
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       setLastKnownLocation(coords);
       return coords;
     } catch {
@@ -120,107 +420,66 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   // Fetch listings
   // -----------------------------------------------------------------
 
-  const fetchListings = useCallback(
-    async ({
-      coords,
-      pageNum,
-      query,
-      catId,
-      km,
-      append,
-    }: {
-      coords: { latitude: number; longitude: number };
-      pageNum: number;
-      query: string;
-      catId: string | undefined;
-      km: number;
-      append: boolean;
-    }) => {
-      try {
-        const response = await api.getNearbyListings({
-          lat: coords.latitude,
-          lng: coords.longitude,
-          radiusKm: km,
-          categoryId: catId,
-          q: query || undefined,
-          page: pageNum,
-          limit: PAGE_LIMIT,
-        });
-        const data = response.data as NearbyListingsResponse;
-        setListings((prev) => (append ? [...prev, ...data.listings] : data.listings));
-        setHasMore(data.hasMore);
-        setPage(pageNum);
-        setFetchError(null);
-      } catch {
-        setFetchError('Could not load listings. Please try again.');
-      }
-    },
-    [],
-  );
-
-  const loadInitial = useCallback(
-    async (refresh = false) => {
-      let coords = lastKnownLocation;
-      if (!coords) {
-        const acquired = await requestLocation();
-        if (!acquired) return;
-        coords = acquired;
-      }
-      if (refresh) {
-        // Re-acquire fresh GPS on pull-to-refresh
-        const fresh = await requestLocation();
-        if (fresh) coords = fresh;
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-      await fetchListings({
-        coords,
-        pageNum: 1,
-        query: appliedQuery,
-        catId: selectedCategoryId,
-        km: radiusKm,
-        append: false,
+  const fetchListings = useCallback(async ({
+    coords,
+    pageNum,
+    query,
+    catId,
+    km,
+    append,
+  }: {
+    coords: { latitude: number; longitude: number };
+    pageNum: number;
+    query: string;
+    catId: string | undefined;
+    km: number;
+    append: boolean;
+  }) => {
+    try {
+      const response = await api.getNearbyListings({
+        lat: coords.latitude,
+        lng: coords.longitude,
+        radiusKm: km,
+        categoryId: catId,
+        q: query || undefined,
+        page: pageNum,
+        limit: PAGE_LIMIT,
       });
-      if (refresh) {
-        setIsRefreshing(false);
-      } else {
-        setIsLoading(false);
-      }
-    },
-    [
-      lastKnownLocation,
-      requestLocation,
-      fetchListings,
-      appliedQuery,
-      selectedCategoryId,
-      radiusKm,
-    ],
-  );
+      const data = response.data as NearbyListingsResponse;
+      setListings((prev) => (append ? [...prev, ...data.listings] : data.listings));
+      setHasMore(data.hasMore);
+      setPage(pageNum);
+      setFetchError(null);
+    } catch {
+      setFetchError('Could not load listings. Please try again.');
+    }
+  }, []);
+
+  const loadInitial = useCallback(async (refresh = false) => {
+    let coords = lastKnownLocation;
+    if (!coords) {
+      const acquired = await requestLocation();
+      if (!acquired) return;
+      coords = acquired;
+    }
+    if (refresh) {
+      const fresh = await requestLocation();
+      if (fresh) coords = fresh;
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    await fetchListings({ coords, pageNum: 1, query: appliedQuery, catId: selectedCategoryId, km: radiusKm, append: false });
+    if (refresh) setIsRefreshing(false);
+    else setIsLoading(false);
+  }, [lastKnownLocation, requestLocation, fetchListings, appliedQuery, selectedCategoryId, radiusKm]);
 
   const loadNextPage = useCallback(async () => {
     if (!hasMore || isFetchingMore || isLoading || !lastKnownLocation) return;
     setIsFetchingMore(true);
-    await fetchListings({
-      coords: lastKnownLocation,
-      pageNum: page + 1,
-      query: appliedQuery,
-      catId: selectedCategoryId,
-      km: radiusKm,
-      append: true,
-    });
+    await fetchListings({ coords: lastKnownLocation, pageNum: page + 1, query: appliedQuery, catId: selectedCategoryId, km: radiusKm, append: true });
     setIsFetchingMore(false);
-  }, [
-    hasMore,
-    isFetchingMore,
-    isLoading,
-    lastKnownLocation,
-    fetchListings,
-    page,
-    appliedQuery,
-    selectedCategoryId,
-    radiusKm,
-  ]);
+  }, [hasMore, isFetchingMore, isLoading, lastKnownLocation, fetchListings, page, appliedQuery, selectedCategoryId, radiusKm]);
 
   // -----------------------------------------------------------------
   // Categories
@@ -232,7 +491,7 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       const data = response.data as CategoriesResponse;
       setCategories(data.categories);
     } catch {
-      // Non-critical — filter sheet will just show no categories
+      // Non-critical
     }
   }, []);
 
@@ -242,42 +501,33 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
 
   useEffect(() => {
     fetchCategories();
-    loadInitial(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload when filters change
+  useFocusEffect(
+    useCallback(() => {
+      loadInitial(false);
+    }, [loadInitial]),
+  );
+
+  // Reload on filter change
   useEffect(() => {
     if (!lastKnownLocation) return;
     setIsLoading(true);
-    fetchListings({
-      coords: lastKnownLocation,
-      pageNum: 1,
-      query: appliedQuery,
-      catId: selectedCategoryId,
-      km: radiusKm,
-      append: false,
-    }).finally(() => setIsLoading(false));
+    fetchListings({ coords: lastKnownLocation, pageNum: 1, query: appliedQuery, catId: selectedCategoryId, km: radiusKm, append: false })
+      .finally(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedQuery, selectedCategoryId, radiusKm]);
 
-  // -----------------------------------------------------------------
-  // Search input with debounce
-  // -----------------------------------------------------------------
-
+  // Debounce search
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      setAppliedQuery(text);
-    }, SEARCH_DEBOUNCE_MS);
+    debounceTimer.current = setTimeout(() => setAppliedQuery(text), SEARCH_DEBOUNCE_MS);
   }, []);
 
-  // Clean up timer on unmount
   useEffect(() => {
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
   }, []);
 
   // -----------------------------------------------------------------
@@ -305,79 +555,26 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   // Navigation
   // -----------------------------------------------------------------
 
-  const handleCardPress = useCallback(
-    (listing: ListingWithDetails) => {
-      navigation.navigate('ListingDetail', { listingId: listing.id });
-    },
-    [navigation],
-  );
+  const handleCardPress = useCallback((listing: ListingWithDetails) => {
+    navigation.navigate('ListingDetail', { listingId: listing.id });
+  }, [navigation]);
 
   // -----------------------------------------------------------------
-  // Render helpers
+  // Derived data
   // -----------------------------------------------------------------
-
-  const keyExtractor = useCallback((item: ListingWithDetails) => item.id, []);
-
-  const renderItem = useCallback(
-    ({ item }: { item: ListingWithDetails }) => (
-      <ListingCard listing={item} onPress={handleCardPress} />
-    ),
-    [handleCardPress],
-  );
 
   const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (selectedCategoryId) count += 1;
-    if (radiusKm !== DEFAULT_RADIUS_KM) count += 1;
-    return count;
+    let c = 0;
+    if (selectedCategoryId) c++;
+    if (radiusKm !== DEFAULT_RADIUS_KM) c++;
+    return c;
   }, [selectedCategoryId, radiusKm]);
 
-  const ListHeaderComponent = useMemo(
-    () => (
-      <View style={styles.listHeader}>
-        <Text style={styles.nearbyLabel}>Nearby listings</Text>
-      </View>
-    ),
-    [],
-  );
-
-  const ListFooterComponent = useMemo(
-    () =>
-      isFetchingMore ? (
-        <View style={styles.footer}>
-          <ActivityIndicator color={colors.primaryDark} />
-        </View>
-      ) : null,
-    [isFetchingMore],
-  );
-
-  const ListEmptyComponent = useMemo(() => {
-    if (isLoading) return null;
-    return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>No listings found</Text>
-        <Text style={styles.emptyBody}>
-          There are no active listings within {radiusKm} km of your location.
-        </Text>
-        {radiusKm < 100 ? (
-          <TouchableOpacity
-            style={styles.emptyAction}
-            onPress={() => setRadiusKm(Math.min(radiusKm * 2, 100))}
-            accessibilityRole="button"
-            accessibilityLabel="Increase search radius"
-            accessibilityHint={`Doubles the radius to ${Math.min(radiusKm * 2, 100)} km`}
-          >
-            <Text style={styles.emptyActionText}>
-              Increase radius to {Math.min(radiusKm * 2, 100)} km
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    );
-  }, [isLoading, radiusKm]);
+  // Top 6 listings for nearby horizontal scroll
+  const nearbyListings = useMemo(() => listings.slice(0, 6), [listings]);
 
   // -----------------------------------------------------------------
-  // Permission denied screen
+  // Permission denied
   // -----------------------------------------------------------------
 
   if (locationPermissionDenied) {
@@ -386,27 +583,12 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
         <View style={styles.permissionDenied}>
           <Text style={styles.permissionTitle}>Location access required</Text>
           <Text style={styles.permissionBody}>
-            Marketplace needs your location to show nearby listings. Please enable
-            location access in your device settings.
+            Marketplace needs your location to show nearby listings. Please enable location access in your device settings.
           </Text>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => Linking.openSettings()}
-            accessibilityRole="button"
-            accessibilityLabel="Open device settings"
-            accessibilityHint="Opens the device settings app so you can enable location access"
-          >
+          <TouchableOpacity style={styles.settingsButton} onPress={() => Linking.openSettings()}>
             <Text style={styles.settingsButtonText}>Open Settings</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => {
-              setLocationPermissionDenied(false);
-              loadInitial(false);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Try again"
-          >
+          <TouchableOpacity style={styles.retryButton} onPress={() => { setLocationPermissionDenied(false); loadInitial(false); }}>
             <Text style={styles.retryButtonText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -415,72 +597,171 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   }
 
   // -----------------------------------------------------------------
-  // Main render
+  // Render
   // -----------------------------------------------------------------
+
+  const renderGridRow = ({ item }: { item: ListingWithDetails[] }) => (
+    <View style={styles.gridRow}>
+      {item.map((listing) => (
+        <GridItem key={listing.id} listing={listing} onPress={handleCardPress} />
+      ))}
+      {/* Fill empty cells */}
+      {item.length < GRID_COLUMNS &&
+        Array.from({ length: GRID_COLUMNS - item.length }).map((_, i) => (
+          <View key={`empty-${i}`} style={{ width: GRID_ITEM_WIDTH }} />
+        ))}
+    </View>
+  );
+
+  // Chunk listings into rows of 3
+  const gridRows = useMemo(() => {
+    const rows: ListingWithDetails[][] = [];
+    for (let i = 0; i < listings.length; i += GRID_COLUMNS) {
+      rows.push(listings.slice(i, i + GRID_COLUMNS));
+    }
+    return rows;
+  }, [listings]);
+
+  const ListHeaderComponent = (
+    <View>
+      {/* Error banner */}
+      {fetchError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{fetchError}</Text>
+          <TouchableOpacity onPress={() => loadInitial(false)}>
+            <Text style={styles.retryLink}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {/* Grid / Feed toggle */}
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleGroup}>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'grid' && styles.toggleButtonActive]}
+            onPress={() => setViewMode('grid')}
+            accessibilityRole="button"
+            accessibilityLabel="Grid view"
+            accessibilityState={{ selected: viewMode === 'grid' }}
+          >
+            <Text style={[styles.toggleText, viewMode === 'grid' && styles.toggleTextActive]}>Grid</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'feed' && styles.toggleButtonActive]}
+            onPress={() => setViewMode('feed')}
+            accessibilityRole="button"
+            accessibilityLabel="Feed view"
+            accessibilityState={{ selected: viewMode === 'feed' }}
+          >
+            <Text style={[styles.toggleText, viewMode === 'feed' && styles.toggleTextActive]}>Feed</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          style={[styles.filterChip, activeFilterCount > 0 && styles.filterChipActive]}
+          onPress={openFilterSheet}
+          accessibilityRole="button"
+          accessibilityLabel={activeFilterCount > 0 ? `${activeFilterCount} filters active` : 'Open filters'}
+        >
+          <Text style={[styles.filterChipText, activeFilterCount > 0 && styles.filterChipTextActive]}>
+            ⊞ {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filter'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const ListFooterComponent = (
+    <View>
+      {isFetchingMore ? (
+        <View style={styles.footer}>
+          <ActivityIndicator color={colors.primaryDark} />
+        </View>
+      ) : null}
+
+      {/* Nearby Treasures section */}
+      {nearbyListings.length > 0 && (
+        <View style={styles.nearbySection}>
+          <Text style={styles.nearbySectionTitle}>NEARBY TREASURES</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.nearbyScroll}
+          >
+            {nearbyListings.map((listing) => (
+              <NearbyCard key={listing.id} listing={listing} onPress={handleCardPress} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+
+  const ListEmptyComponent = isLoading ? null : (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>No listings found</Text>
+      <Text style={styles.emptyBody}>
+        There are no active listings within {radiusKm} km of your location.
+      </Text>
+      {radiusKm < 100 && (
+        <TouchableOpacity style={styles.emptyAction} onPress={() => setRadiusKm(Math.min(radiusKm * 2, 100))}>
+          <Text style={styles.emptyActionText}>Increase radius to {Math.min(radiusKm * 2, 100)} km</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Search bar + filter button */}
-      <View style={styles.searchRow}>
-        <View style={styles.searchBarContainer}>
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Menu">
+            <Ionicons name="menu" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Atelier</Text>
+          <TouchableOpacity
+            style={styles.headerIcon}
+            accessibilityRole="button"
+            accessibilityLabel={`Notifications${notificationUnread > 0 ? `, ${notificationUnread} unread` : ''}`}
+            onPress={clearNotifications}
+          >
+            <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
+            {notificationUnread > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>
+                  {notificationUnread > 99 ? '99+' : notificationUnread}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search listings…"
+            placeholder="Search curated treasures…"
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={handleSearchChange}
             returnKeyType="search"
             clearButtonMode="while-editing"
             accessibilityLabel="Search listings"
-            accessibilityHint="Filters listings by keyword"
           />
         </View>
-        <TouchableOpacity
-          style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-          onPress={openFilterSheet}
-          accessibilityRole="button"
-          accessibilityLabel="Filters"
-          accessibilityHint={
-            activeFilterCount > 0
-              ? `${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active`
-              : 'Open filter options'
-          }
-        >
-          <Text
-            style={[
-              styles.filterButtonText,
-              activeFilterCount > 0 && styles.filterButtonTextActive,
-            ]}
-          >
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-          </Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Error banner */}
-      {fetchError ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{fetchError}</Text>
-          <TouchableOpacity
-            onPress={() => loadInitial(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Retry"
-          >
-            <Text style={styles.retryLink}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {/* Initial loading spinner */}
+      {/* ── Content ── */}
       {isLoading && listings.length === 0 ? (
         <View style={styles.loadingCenter}>
           <ActivityIndicator size="large" color={colors.primaryDark} />
         </View>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <FlatList
-          data={listings}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
+          data={gridRows}
+          keyExtractor={(_, i) => String(i)}
+          renderItem={renderGridRow}
           ListHeaderComponent={ListHeaderComponent}
           ListFooterComponent={ListFooterComponent}
           ListEmptyComponent={ListEmptyComponent}
@@ -488,67 +769,57 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
           onRefresh={() => loadInitial(true)}
           onEndReached={loadNextPage}
           onEndReachedThreshold={0.3}
-          contentContainerStyle={
-            listings.length === 0 ? styles.emptyListContent : styles.listContent
-          }
+          contentContainerStyle={styles.gridContent}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <FlatList
+          data={listings}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <FeedItem listing={item} onPress={handleCardPress} />}
+          ListHeaderComponent={ListHeaderComponent}
+          ListFooterComponent={ListFooterComponent}
+          ListEmptyComponent={ListEmptyComponent}
+          refreshing={isRefreshing}
+          onRefresh={() => loadInitial(true)}
+          onEndReached={loadNextPage}
+          onEndReachedThreshold={0.3}
+          contentContainerStyle={styles.feedContent}
           showsVerticalScrollIndicator={false}
         />
       )}
 
-      {/* Filter sheet modal */}
-      <Modal
-        visible={filterSheetVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setFilterSheetVisible(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setFilterSheetVisible(false)}
-          accessibilityLabel="Close filters"
-          accessibilityRole="button"
-        />
+      {/* ── Filter modal ── */}
+      <Modal visible={filterSheetVisible} transparent animationType="slide" onRequestClose={() => setFilterSheetVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setFilterSheetVisible(false)} />
         <View style={[styles.filterSheet, { paddingBottom: insets.bottom + spacing.base }]}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>Filters</Text>
 
-          {/* Radius picker */}
           <Text style={styles.filterSectionLabel}>Search radius</Text>
-          <View style={styles.radiusOptions}>
+          <View style={styles.chipGroup}>
             {RADIUS_OPTIONS.map((km) => (
               <TouchableOpacity
                 key={km}
                 style={[styles.chip, pendingRadiusKm === km && styles.chipSelected]}
                 onPress={() => setPendingRadiusKm(km)}
                 accessibilityRole="radio"
-                accessibilityLabel={`${km} km`}
                 accessibilityState={{ checked: pendingRadiusKm === km }}
               >
-                <Text
-                  style={[
-                    styles.chipText,
-                    pendingRadiusKm === km && styles.chipTextSelected,
-                  ]}
-                >
-                  {km} km
-                </Text>
+                <Text style={[styles.chipText, pendingRadiusKm === km && styles.chipTextSelected]}>{km} km</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Category picker */}
           <Text style={styles.filterSectionLabel}>Category</Text>
-          <View style={styles.categoryOptions}>
+          <View style={styles.chipGroup}>
             <TouchableOpacity
               style={[styles.chip, !pendingCategoryId && styles.chipSelected]}
               onPress={() => setPendingCategoryId(undefined)}
               accessibilityRole="radio"
-              accessibilityLabel="All categories"
               accessibilityState={{ checked: !pendingCategoryId }}
             >
-              <Text style={[styles.chipText, !pendingCategoryId && styles.chipTextSelected]}>
-                All
-              </Text>
+              <Text style={[styles.chipText, !pendingCategoryId && styles.chipTextSelected]}>All</Text>
             </TouchableOpacity>
             {categories.map((cat) => (
               <TouchableOpacity
@@ -556,37 +827,18 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
                 style={[styles.chip, pendingCategoryId === cat.id && styles.chipSelected]}
                 onPress={() => setPendingCategoryId(cat.id)}
                 accessibilityRole="radio"
-                accessibilityLabel={cat.name}
                 accessibilityState={{ checked: pendingCategoryId === cat.id }}
               >
-                <Text
-                  style={[
-                    styles.chipText,
-                    pendingCategoryId === cat.id && styles.chipTextSelected,
-                  ]}
-                >
-                  {cat.name}
-                </Text>
+                <Text style={[styles.chipText, pendingCategoryId === cat.id && styles.chipTextSelected]}>{cat.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Actions */}
           <View style={styles.sheetActions}>
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={clearFilters}
-              accessibilityRole="button"
-              accessibilityLabel="Clear all filters"
-            >
+            <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
               <Text style={styles.clearButtonText}>Clear</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={applyFilters}
-              accessibilityRole="button"
-              accessibilityLabel="Apply filters"
-            >
+            <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
               <Text style={styles.applyButtonText}>Apply</Text>
             </TouchableOpacity>
           </View>
@@ -605,70 +857,146 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+
+  // Header
+  header: {
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.md,
   },
-  searchBarContainer: {
-    flex: 1,
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: 0,
+    right: -2,
+    backgroundColor: colors.error,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  notifBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: 1,
+    fontStyle: 'italic',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.background,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.select({ ios: spacing.sm, android: spacing.xs }) ?? spacing.sm,
-    marginRight: spacing.sm,
+    gap: spacing.sm,
   },
   searchInput: {
+    flex: 1,
     ...typography.body,
     color: colors.textPrimary,
-    padding: 0, // Remove default Android padding
+    padding: 0,
   },
-  filterButton: {
+
+  // Toggle row
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  toggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: colors.border,
+    borderRadius: radius.sm,
+    padding: 2,
+  },
+  toggleButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.sm - 2,
+  },
+  toggleButtonActive: {
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  toggleText: {
+    ...typography.label,
+    color: colors.textSecondary,
+  },
+  toggleTextActive: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  filterChip: {
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 2,
   },
-  filterButtonActive: {
+  filterChipActive: {
     borderColor: colors.primaryDark,
     backgroundColor: colors.primary,
   },
-  filterButtonText: {
+  filterChipText: {
     ...typography.label,
     color: colors.textSecondary,
   },
-  filterButtonTextActive: {
+  filterChipTextActive: {
     color: colors.primaryDark,
     fontWeight: '600',
   },
-  listContent: {
-    paddingBottom: spacing.xl,
+
+  // Grid layout
+  gridContent: {
+    paddingHorizontal: GRID_PADDING,
+    paddingBottom: spacing.xxl,
   },
-  emptyListContent: {
-    flexGrow: 1,
-    paddingBottom: spacing.xl,
+  gridRow: {
+    flexDirection: 'row',
+    gap: GRID_GAP,
+    marginBottom: GRID_GAP,
   },
-  listHeader: {
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-    paddingBottom: spacing.sm,
+
+  // Feed layout
+  feedContent: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxl,
   },
-  nearbyLabel: {
-    ...typography.title,
-    color: colors.textPrimary,
-  },
-  footer: {
-    paddingVertical: spacing.base,
-    alignItems: 'center',
-  },
+
+  // Loading / error / empty
   loadingCenter: {
     flex: 1,
     alignItems: 'center',
@@ -695,8 +1023,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: spacing.sm,
   },
+  footer: {
+    paddingVertical: spacing.base,
+    alignItems: 'center',
+  },
   emptyState: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
@@ -727,6 +1058,25 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontWeight: '600',
   },
+
+  // Nearby section
+  nearbySection: {
+    marginTop: spacing.base,
+    paddingBottom: spacing.base,
+  },
+  nearbySectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 1.2,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.sm,
+  },
+  nearbyScroll: {
+    paddingHorizontal: spacing.base,
+    paddingRight: spacing.base,
+  },
+
   // Permission denied
   permissionDenied: {
     flex: 1,
@@ -773,7 +1123,8 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  // Modal / filter sheet
+
+  // Filter modal
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -808,13 +1159,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
-  radiusOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.base,
-  },
-  categoryOptions: {
+  chipGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,

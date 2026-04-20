@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AlertButton,
   Dimensions,
   FlatList,
   Image,
@@ -13,14 +14,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
+import { useSavedStore } from '../../store/savedStore';
 import StarRating from '../../components/StarRating';
 import PrimaryButton from '../../components/PrimaryButton';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
-import { BrowseStackParamList } from '../../navigation/types';
+import { BrowseStackParamList, ProfileStackParamList, MyListingsStackParamList } from '../../navigation/types';
 import type { ListingWithDetails } from '@marketplace/shared';
+
+type AnyStackWithUserProfile = NativeStackNavigationProp<
+  BrowseStackParamList & ProfileStackParamList & MyListingsStackParamList
+>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CAROUSEL_HEIGHT = 300;
@@ -187,6 +196,10 @@ type Props = NativeStackScreenProps<BrowseStackParamList, 'ListingDetail'>;
 export default function ListingDetailScreen({ route, navigation }: Props): React.JSX.Element {
   const { listingId } = route.params;
   const currentUser = useAuthStore((s) => s.user);
+  const anyNavigation = useNavigation<AnyStackWithUserProfile>();
+
+  const isSaved = useSavedStore((s) => s.savedIds.has(listingId));
+  const toggleSave = useSavedStore((s) => s.toggleSave);
 
   const [listing, setListing] = useState<ListingWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -240,12 +253,13 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
     }
   }, [listing, navigation]);
 
-  const handleMarkSold = useCallback(() => {
-    if (!listing) return;
-    Alert.alert(
-      'Mark as Sold',
-      'Are you sure you want to mark this listing as sold? This cannot be undone.',
-      [
+  const confirmMarkSold = useCallback(
+    async (buyerId?: string, buyerName?: string) => {
+      if (!listing) return;
+      const message = buyerName
+        ? `Mark this listing as sold to ${buyerName}? This cannot be undone.`
+        : 'Mark this listing as sold? This cannot be undone.';
+      Alert.alert('Mark as Sold', message, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Mark as Sold',
@@ -253,9 +267,9 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
           onPress: async () => {
             try {
               setMarkSoldLoading(true);
-              await api.markListingSold(listing.id);
+              await api.markListingSold(listing.id, buyerId);
               setListing((prev: ListingWithDetails | null) =>
-                prev ? { ...prev, status: 'SOLD' as const } : prev,
+                prev ? { ...prev, status: 'SOLD' as const, buyerId: buyerId ?? null } : prev,
               );
             } catch {
               Alert.alert('Error', 'Could not update listing status. Please try again.');
@@ -264,18 +278,53 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
             }
           },
         },
-      ],
-    );
-  }, [listing]);
+      ]);
+    },
+    [listing],
+  );
+
+  const handleMarkSold = useCallback(async () => {
+    if (!listing) return;
+    try {
+      setMarkSoldLoading(true);
+      const res = await api.getListingBuyers(listing.id);
+      const buyers = res.data.buyers ?? [];
+      setMarkSoldLoading(false);
+
+      if (buyers.length === 0) {
+        // No conversations — allow marking sold without a buyer
+        confirmMarkSold();
+      } else if (buyers.length === 1) {
+        // Single buyer — confirm directly
+        confirmMarkSold(buyers[0].id, buyers[0].displayName);
+      } else {
+        // Multiple buyers — let seller pick
+        const buttons: AlertButton[] = buyers.map(
+          (buyer) => ({
+            text: buyer.displayName,
+            onPress: () => { confirmMarkSold(buyer.id, buyer.displayName); },
+          }),
+        );
+        buttons.push({ text: 'Cancel' });
+        Alert.alert('Who bought this item?', 'Select the buyer from your conversations.', buttons);
+      }
+    } catch {
+      setMarkSoldLoading(false);
+      Alert.alert('Error', 'Could not load buyers. Please try again.');
+    }
+  }, [listing, confirmMarkSold]);
 
   const handleEditListing = useCallback(() => {
-    // Navigate to PostListing (sell tab) — the SellStack's PostListing screen
-    // accepts a listingId for pre-fill; navigate via parent tab navigation
+    if (!isOwner) return;
     navigation.getParent()?.navigate('SellTab', {
       screen: 'PostListing',
       params: { listingId: listing?.id },
     });
-  }, [listing, navigation]);
+  }, [isOwner, listing, navigation]);
+
+  const handleToggleSave = useCallback(() => {
+    toggleSave(listingId);
+  }, [toggleSave, listingId]);
 
   if (loading) {
     return <ListingDetailSkeleton />;
@@ -295,7 +344,24 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
         showsVerticalScrollIndicator={false}
       >
         {/* Photo Carousel */}
-        <PhotoCarousel images={listing.images} />
+        <View>
+          <PhotoCarousel images={listing.images} />
+          {currentUser && !isOwner && (
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleToggleSave}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save listing'}
+              accessibilityState={{ selected: isSaved }}
+            >
+              <Ionicons
+                name={isSaved ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isSaved ? colors.error : colors.surface}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.content}>
           {/* Status badge for sold listings */}
@@ -347,7 +413,18 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
 
           {/* Seller Info */}
           <Text style={styles.sectionHeading}>Seller</Text>
-          <View style={styles.sellerRow} accessibilityLabel={`Seller: ${listing.seller.displayName}`}>
+          <TouchableOpacity
+            style={styles.sellerRow}
+            accessibilityLabel={`View ${listing.seller.displayName}'s profile`}
+            accessibilityRole="button"
+            onPress={() =>
+              anyNavigation.navigate('UserProfile', {
+                userId: listing.sellerId,
+                sellerName: listing.seller.displayName,
+                sellerAvatarUrl: listing.seller.avatarUrl,
+              })
+            }
+          >
             {listing.seller.avatarUrl ? (
               <Image
                 source={{ uri: listing.seller.avatarUrl }}
@@ -372,7 +449,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
                 size={14}
               />
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Action Buttons */}
           <View style={styles.actions}>
@@ -415,6 +492,27 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
                 style={styles.actionButton}
                 accessibilityHint="Opens a chat thread with the seller"
               />
+            )}
+
+            {/* Leave a Review — visible to the buyer when listing is SOLD */}
+            {isSold && currentUser && listing.buyerId === currentUser.id && (
+              <TouchableOpacity
+                style={styles.reviewButton}
+                onPress={() =>
+                  navigation.navigate('WriteReview', {
+                    listingId: listing.id,
+                    revieweeId: listing.sellerId,
+                    revieweeName: listing.seller.displayName,
+                    listingTitle: listing.title,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Leave a Review"
+                accessibilityHint="Opens the review form for this transaction"
+              >
+                <Ionicons name="star-outline" size={18} color={colors.primaryDark} />
+                <Text style={styles.reviewButtonText}>Leave a Review</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -491,6 +589,19 @@ const styles = StyleSheet.create({
   },
   dotInactive: {
     backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+
+  // Save button
+  saveButton: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Content
@@ -636,6 +747,25 @@ const styles = StyleSheet.create({
   },
   secondaryButtonTextDisabled: {
     color: colors.textSecondary,
+  },
+
+  // Review button
+  reviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.primaryDark,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.xl,
+    minHeight: 56,
+  },
+  reviewButtonText: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.primaryDark,
   },
 
   // Skeleton

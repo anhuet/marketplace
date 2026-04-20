@@ -35,6 +35,27 @@ export async function createReviewHandler(
         }
       },
     );
+
+    // Fire-and-forget: notify reviewee of new review — does not block the response
+    import('../services/pushService').then(({ sendNewReviewNotification }) => {
+      // Fetch listing title + reviewer display name for the notification
+      import('../lib/prisma').then(({ prisma }) => {
+        Promise.all([
+          prisma.listing.findUnique({ where: { id: data.listingId }, select: { title: true } }),
+          prisma.user.findUnique({ where: { id: req.dbUser!.id }, select: { displayName: true } }),
+        ]).then(([listing, reviewer]) => {
+          if (listing && reviewer) {
+            void sendNewReviewNotification(
+              data.revieweeId,
+              reviewer.displayName,
+              data.rating,
+              listing.title,
+            );
+          }
+        });
+      });
+    });
+
     res.status(201).json({ review });
   } catch (err) {
     next(err);

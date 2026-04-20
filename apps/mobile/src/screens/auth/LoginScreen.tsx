@@ -58,7 +58,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
       clientId,
       redirectUri,
       scopes: ['openid', 'profile', 'email'],
-      extraParams: { audience },
+      extraParams: { audience, prompt: 'login' },
     },
     discovery,
   );
@@ -80,16 +80,17 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
 
     try {
       const result = await promptAsync();
+      console.log('[Login] promptAsync result.type =', result.type);
 
       if (result.type === 'cancel' || result.type === 'dismiss') {
-        // User cancelled — not an error
         return;
       }
 
       if (result.type !== 'success') {
-        throw new Error('Authentication was not successful. Please try again.');
+        throw new Error(`Auth failed: result.type = ${result.type}`);
       }
 
+      console.log('[Login] exchanging code...');
       const tokenResponse = await AuthSession.exchangeCodeAsync(
         {
           clientId,
@@ -100,23 +101,27 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
         discovery,
       );
 
+      console.log('[Login] accessToken present =', !!tokenResponse.accessToken);
+
       if (!tokenResponse.accessToken) {
         throw new Error('No access token received from Auth0.');
       }
 
-      // Token is not yet in the store — pass it explicitly for this first call.
+      console.log('[Login] calling /auth/me...');
       const meResponse = await apiClient.get<{ user: User }>('/auth/me', {
         headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
       });
+
+      console.log('[Login] /auth/me status =', meResponse.status, 'user =', meResponse.data?.user?.email);
 
       if (!meResponse.data.user) {
         throw new Error(`/auth/me returned no user. Response: ${JSON.stringify(meResponse.data)}`);
       }
 
       setAuth(meResponse.data.user, tokenResponse.accessToken);
-      // RootNavigator observes isAuthenticated and transitions to MainTabs automatically
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      console.log('[Login] ERROR =', message);
       setError(`DEBUG: ${message}`);
     } finally {
       setLoading(false);

@@ -24,6 +24,18 @@ export async function findOrCreateUser(
     return existing;
   }
 
+  // If no user found by auth0Id, check if email already exists (e.g. tenant migration)
+  // In that case, re-link the existing account to the new auth0Id instead of creating a duplicate.
+  if (email) {
+    const existingByEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingByEmail) {
+      return prisma.user.update({
+        where: { email },
+        data: { auth0Id },
+      });
+    }
+  }
+
   // Create the user record
   const user = await prisma.user.create({
     data: {

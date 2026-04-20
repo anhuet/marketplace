@@ -25,10 +25,12 @@ model User {
   inviteCodeUsedId   String?      @unique @map("invite_code_used_id")
 
   listings           Listing[]
-  buyerConversations Conversation[] @relation("Buyer")
+  purchasedListings  Listing[]      @relation("Buyer")
+  buyerConversations Conversation[] @relation("BuyerConversation")
   reviewsGiven       Review[]       @relation("Reviewer")
   reviewsReceived    Review[]       @relation("Reviewee")
   pushTokens         PushToken[]
+  savedListings      SavedListing[]
 
   @@map("users")
 }
@@ -79,15 +81,18 @@ model Listing {
   longitude   Float
   categoryId  String        @map("category_id")
   sellerId    String        @map("seller_id")
+  buyerId     String?       @map("buyer_id")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
   // Relations
   seller        User           @relation(fields: [sellerId], references: [id])
+  buyer         User?          @relation("Buyer", fields: [buyerId], references: [id])
   category      Category       @relation(fields: [categoryId], references: [id])
   images        ListingImage[]
   conversations Conversation[]
   reviews       Review[]
+  savedBy       SavedListing[]
 
   @@index([latitude, longitude])
   @@index([status])
@@ -117,7 +122,7 @@ model Conversation {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   listing  Listing   @relation(fields: [listingId], references: [id])
-  buyer    User      @relation("Buyer", fields: [buyerId], references: [id])
+  buyer    User      @relation("BuyerConversation", fields: [buyerId], references: [id])
   messages Message[]
 
   @@unique([listingId, buyerId])
@@ -175,4 +180,18 @@ model PushToken {
 
   @@index([userId])
   @@map("push_tokens")
+}
+
+model SavedListing {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@map("saved_listings")
 }

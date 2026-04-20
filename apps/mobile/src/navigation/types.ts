@@ -14,6 +14,13 @@ export type BrowseStackParamList = {
   Browse: undefined;
   ListingDetail: { listingId: string };
   ChatThread: { conversationId: string; listingTitle: string };
+  UserProfile: { userId: string; sellerName?: string; sellerAvatarUrl?: string | null };
+  WriteReview: {
+    listingId: string;
+    revieweeId: string;
+    revieweeName: string;
+    listingTitle: string;
+  };
 };
 
 // Messages Stack
@@ -35,22 +42,36 @@ export type ProfileStackParamList = {
   MyListings: undefined;
   ConversationList: undefined;
   ChatThread: { conversationId: string; listingTitle: string };
-  UserProfile: { userId: string };
+  UserProfile: { userId: string; sellerName?: string; sellerAvatarUrl?: string | null };
   ListingDetail: { listingId: string };
+  WriteReview: {
+    listingId: string;
+    revieweeId: string;
+    revieweeName: string;
+    listingTitle: string;
+  };
+};
+
+// MyListings Stack
+export type MyListingsStackParamList = {
+  MyListings: undefined;
+  ListingDetail: { listingId: string };
+  UserProfile: { userId: string; sellerName?: string; sellerAvatarUrl?: string | null };
 };
 
 // Saved Stack
 export type SavedStackParamList = {
   Saved: undefined;
   ListingDetail: { listingId: string };
+  UserProfile: { userId: string; sellerName?: string; sellerAvatarUrl?: string | null };
 };
 
 // Main Tab Navigator
 export type MainTabParamList = {
   HomeTab: undefined;
-  MessagesTab: undefined;
-  SellTab: undefined;
   SavedTab: undefined;
+  SellTab: undefined;
+  MessagesTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -73,6 +94,12 @@ export type BrowseStackScreenProps<T extends keyof BrowseStackParamList> =
 export type MessagesStackScreenProps<T extends keyof MessagesStackParamList> =
   CompositeScreenProps<
     NativeStackScreenProps<MessagesStackParamList, T>,
+    BottomTabScreenProps<MainTabParamList>
+  >;
+
+export type MyListingsStackScreenProps<T extends keyof MyListingsStackParamList> =
+  CompositeScreenProps<
+    NativeStackScreenProps<MyListingsStackParamList, T>,
     BottomTabScreenProps<MainTabParamList>
   >;
 

@@ -9,17 +9,25 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { api } from '../../lib/api';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import StarRating from '../../components/StarRating';
 import ListingCard from '../../components/ListingCard';
-import type { ProfileStackScreenProps } from '../../navigation/types';
+import type { ProfileStackParamList, BrowseStackParamList } from '../../navigation/types';
 import type { ListingWithDetails, ReviewWithDetails } from '@marketplace/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Props = ProfileStackScreenProps<'UserProfile'>;
+type UserProfileRouteParams = {
+  userId: string;
+  sellerName?: string;
+  sellerAvatarUrl?: string | null;
+};
+
+type AnyNavigation = NativeStackNavigationProp<ProfileStackParamList & BrowseStackParamList>;
 
 interface PublicUserProfile {
   displayName: string;
@@ -44,11 +52,17 @@ function formatDate(iso: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function UserProfileScreen({ route, navigation }: Props): React.JSX.Element {
-  const { userId } = route.params;
+export default function UserProfileScreen(): React.JSX.Element {
+  const navigation = useNavigation<AnyNavigation>();
+  const route = useRoute<RouteProp<{ UserProfile: UserProfileRouteParams }, 'UserProfile'>>();
+  const { userId, sellerName, sellerAvatarUrl } = route.params;
 
-  // Profile data
-  const [profile, setProfile] = useState<PublicUserProfile | null>(null);
+  // Profile data — pre-seeded from route params if available
+  const [profile, setProfile] = useState<PublicUserProfile | null>(
+    sellerName
+      ? { displayName: sellerName, avatarUrl: sellerAvatarUrl ?? null, averageRating: 0, ratingCount: 0 }
+      : null,
+  );
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -71,11 +85,10 @@ export default function UserProfileScreen({ route, navigation }: Props): React.J
     setProfileLoading(true);
     setProfileError(null);
     try {
-      // Use the rating endpoint to get rating data; seller info comes from first listing
       const ratingRes = await api.getUserRating(userId);
       setProfile((prev) => ({
-        displayName: prev?.displayName ?? '',
-        avatarUrl: prev?.avatarUrl ?? null,
+        displayName: prev?.displayName ?? sellerName ?? '',
+        avatarUrl: prev?.avatarUrl ?? sellerAvatarUrl ?? null,
         averageRating: ratingRes.data.averageRating,
         ratingCount: ratingRes.data.ratingCount,
       }));
@@ -84,7 +97,7 @@ export default function UserProfileScreen({ route, navigation }: Props): React.J
     } finally {
       setProfileLoading(false);
     }
-  }, [userId]);
+  }, [userId, sellerName, sellerAvatarUrl]);
 
   const loadListings = useCallback(async () => {
     setListingsLoading(true);
@@ -93,17 +106,6 @@ export default function UserProfileScreen({ route, navigation }: Props): React.J
       const res = await api.getSellerListings(userId);
       const fetchedListings: ListingWithDetails[] = res.data.listings ?? [];
       setListings(fetchedListings);
-
-      // Hydrate profile display name and avatar from seller info in first listing
-      if (fetchedListings.length > 0) {
-        const seller = fetchedListings[0].seller;
-        setProfile((prev) => ({
-          displayName: seller.displayName,
-          avatarUrl: seller.avatarUrl,
-          averageRating: prev?.averageRating ?? seller.averageRating,
-          ratingCount: prev?.ratingCount ?? seller.ratingCount,
-        }));
-      }
     } catch {
       setListingsError('Could not load listings.');
     } finally {
@@ -141,21 +143,19 @@ export default function UserProfileScreen({ route, navigation }: Props): React.J
     loadReviews(1);
   }, [loadProfile, loadListings, loadReviews]);
 
-  // Set screen title once profile name is available
+  // Set screen title — use params immediately, update once profile loads
   useEffect(() => {
-    if (profile?.displayName) {
-      navigation.setOptions({ title: profile.displayName });
+    const title = profile?.displayName || sellerName;
+    if (title) {
+      navigation.setOptions({ title });
     }
-  }, [navigation, profile?.displayName]);
+  }, [navigation, profile?.displayName, sellerName]);
 
   // ── Listing press ────────────────────────────────────────────────────────
 
   const handleListingPress = useCallback(
     (listing: ListingWithDetails) => {
-      navigation.navigate('ChatThread', {
-        conversationId: listing.id,
-        listingTitle: listing.title,
-      });
+      navigation.navigate('ListingDetail', { listingId: listing.id });
     },
     [navigation],
   );

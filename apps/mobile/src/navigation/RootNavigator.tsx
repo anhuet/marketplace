@@ -5,6 +5,7 @@ import { RootStackParamList } from './types';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
 import { useAuthStore } from '../store/authStore';
+import { useSavedStore } from '../store/savedStore';
 import { connectSocket, disconnectSocket } from '../lib/socket';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
@@ -30,8 +31,10 @@ export default function RootNavigator(): React.JSX.Element {
   useEffect(() => {
     if (isAuthenticated && token && token !== 'dev-token') {
       connectSocket(token);
+      useSavedStore.getState().fetchSavedIds();
     } else {
       disconnectSocket();
+      useSavedStore.getState().clear();
     }
   }, [isAuthenticated, token]);
 

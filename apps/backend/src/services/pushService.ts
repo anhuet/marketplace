@@ -94,6 +94,20 @@ export async function sendNewMessageNotification(
   });
 }
 
+export async function sendNewReviewNotification(
+  revieweeId: string,
+  reviewerName: string,
+  rating: number,
+  listingTitle: string,
+): Promise<void> {
+  const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  await sendPushToUser(revieweeId, {
+    title: 'New review received',
+    body: `${reviewerName} rated you ${stars} on "${listingTitle}"`,
+    data: { type: 'new_review', revieweeId },
+  });
+}
+
 export async function sendNewInquiryNotification(
   conversationId: string,
   listingId: string,

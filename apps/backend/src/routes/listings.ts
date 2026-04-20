@@ -9,6 +9,7 @@ import {
   deleteListingHandler,
   updateListingStatusHandler,
   getSellerListingsHandler,
+  getListingBuyersHandler,
 } from '../controllers/listingController';
 
 const router = Router();
@@ -39,5 +40,6 @@ router.post('/', requireAuth, attachUser, uploadImages, createListingHandler);
 router.put('/:id', requireAuth, attachUser, uploadImages, updateListingHandler);
 router.delete('/:id', requireAuth, attachUser, deleteListingHandler);
 router.patch('/:id/status', requireAuth, attachUser, updateListingStatusHandler);
+router.get('/:id/buyers', requireAuth, attachUser, getListingBuyersHandler);
 
 export default router;

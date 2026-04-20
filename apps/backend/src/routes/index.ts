@@ -8,6 +8,7 @@ import reviewsRouter from './reviews';
 import usersRouter from './users';
 import conversationsRouter from './conversations';
 import pushTokensRouter from './pushTokens';
+import savedRouter from './saved';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/reviews', reviewsRouter);
 router.use('/users', usersRouter);
 router.use('/conversations', conversationsRouter);
 router.use('/push-tokens', pushTokensRouter);
+router.use('/saved', savedRouter);
 
 export default router;
