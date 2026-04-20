@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { getPresignedUrl } from '../lib/s3';
 
 export interface NearbyListingsInput {
   lat: number;
@@ -121,8 +122,15 @@ export async function getNearbyListings(input: NearbyListingsInput): Promise<{
     LIMIT ${limit} OFFSET ${offset}
   `;
 
+  const listings = await Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      coverImageUrl: row.coverImageUrl ? await getPresignedUrl(row.coverImageUrl) : null,
+    })),
+  );
+
   return {
-    listings: rows,
+    listings,
     total,
     page,
     limit,

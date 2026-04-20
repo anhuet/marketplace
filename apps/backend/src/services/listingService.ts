@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { Prisma, ListingStatus, Condition } from '@prisma/client';
+import { getPresignedUrl } from '../lib/s3';
 
 export interface CreateListingInput {
   title: string;
@@ -37,8 +38,23 @@ const listingInclude = {
   category: true,
 };
 
+/**
+ * Replaces each stored S3 object URL in a listing's images array with a
+ * short-lived presigned GET URL (1-hour TTL). Returns a new object — does not
+ * mutate the original. Safe to call in dev environments without S3: if the URL
+ * does not match the CDN_URL prefix, the original URL is returned unchanged.
+ */
+async function presignListingImages<
+  T extends { images: { id: string; url: string; order: number }[] },
+>(listing: T): Promise<T> {
+  const images = await Promise.all(
+    listing.images.map(async (img) => ({ ...img, url: await getPresignedUrl(img.url) })),
+  );
+  return { ...listing, images };
+}
+
 export async function createListing(sellerId: string, input: CreateListingInput) {
-  return prisma.listing.create({
+  const listing = await prisma.listing.create({
     data: {
       title: input.title,
       description: input.description,
@@ -54,13 +70,16 @@ export async function createListing(sellerId: string, input: CreateListingInput)
     },
     include: listingInclude,
   });
+  return presignListingImages(listing);
 }
 
 export async function getListingById(id: string) {
-  return prisma.listing.findFirst({
+  const listing = await prisma.listing.findFirst({
     where: { id, status: { not: ListingStatus.DELETED } },
     include: listingInclude,
   });
+  if (!listing) return null;
+  return presignListingImages(listing);
 }
 
 export async function updateListing(id: string, sellerId: string, input: UpdateListingInput) {
@@ -68,7 +87,7 @@ export async function updateListing(id: string, sellerId: string, input: UpdateL
   if (!listing || listing.status === ListingStatus.DELETED) return null;
   if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     if (input.imageUrls !== undefined) {
       await tx.listingImage.deleteMany({ where: { listingId: id } });
       await tx.listingImage.createMany({
@@ -90,6 +109,8 @@ export async function updateListing(id: string, sellerId: string, input: UpdateL
       include: listingInclude,
     });
   });
+
+  return presignListingImages(updated);
 }
 
 export async function softDeleteListing(id: string, sellerId: string) {
@@ -115,7 +136,7 @@ export async function updateListingStatus(id: string, sellerId: string, status: 
 }
 
 export async function getSellerListings(sellerId: string) {
-  return prisma.listing.findMany({
+  const listings = await prisma.listing.findMany({
     where: { sellerId, status: { not: ListingStatus.DELETED } },
     include: {
       images: { orderBy: { order: 'asc' }, take: 1 },
@@ -123,4 +144,5 @@ export async function getSellerListings(sellerId: string) {
     },
     orderBy: { createdAt: 'desc' },
   });
+  return Promise.all(listings.map(presignListingImages));
 }
