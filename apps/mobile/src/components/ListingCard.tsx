@@ -35,8 +35,9 @@ function formatDistance(distanceKm: number | undefined): string {
 }
 
 function ListingCard({ listing, onPress }: ListingCardProps): React.JSX.Element {
-  const coverImage =
-    listing.images.find((img: ListingImage) => img.order === 0) ?? listing.images[0];
+  const coverImageUrl: string | undefined =
+    (listing as { coverImageUrl?: string }).coverImageUrl ??
+    (listing.images?.find((img: ListingImage) => img.order === 0) ?? listing.images?.[0])?.url;
   const priceFormatted = formatPrice(listing.price);
   const distanceText = formatDistance(listing.distanceKm);
   const accessibilityLabel = [
@@ -58,9 +59,9 @@ function ListingCard({ listing, onPress }: ListingCardProps): React.JSX.Element 
       accessibilityHint="Opens listing details"
     >
       <View style={styles.imageContainer}>
-        {coverImage ? (
+        {coverImageUrl ? (
           <Image
-            source={{ uri: coverImage.url }}
+            source={{ uri: coverImageUrl }}
             style={styles.image}
             resizeMode="cover"
             accessibilityLabel={`Photo of ${listing.title}`}
