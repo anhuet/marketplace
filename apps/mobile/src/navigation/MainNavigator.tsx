@@ -111,6 +111,11 @@ function ProfileNavigator() {
         component={UserProfileScreen}
         options={{ title: '' }}
       />
+      <ProfileStack.Screen
+        name="ListingDetail"
+        component={ListingDetailScreen}
+        options={{ title: '' }}
+      />
     </ProfileStack.Navigator>
   );
 }

@@ -195,10 +195,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
   const handleListingPress = useCallback(
     (listing: ListingWithDetails) => {
-      navigation.navigate('ChatThread', {
-        conversationId: listing.id,
-        listingTitle: listing.title,
-      });
+      navigation.navigate('ListingDetail', { listingId: listing.id });
     },
     [navigation],
   );

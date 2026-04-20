@@ -35,6 +35,7 @@ export type ProfileStackParamList = {
   ConversationList: undefined;
   ChatThread: { conversationId: string; listingTitle: string };
   UserProfile: { userId: string };
+  ListingDetail: { listingId: string };
 };
 
 // Main Tab Navigator
