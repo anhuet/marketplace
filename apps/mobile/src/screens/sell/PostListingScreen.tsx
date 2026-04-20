@@ -72,7 +72,7 @@ const listingSchema = z.object({
     .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
       message: 'Price must be a non-negative number',
     }),
-  categoryId: z.string().uuid('Please select a category'),
+  categoryId: z.string().min(1, 'Please select a category'),
   condition: z.enum(['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR'], {
     errorMap: () => ({ message: 'Please select a condition' }),
   }),
@@ -347,8 +347,15 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         await api.createListing(formData);
         navigation.goBack();
       }
-    } catch {
-      setApiError('Something went wrong. Please check your connection and try again.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } }; status?: number } };
+      const serverMsg = axiosErr?.response?.data?.error?.message;
+      const status = axiosErr?.response?.status;
+      setApiError(
+        serverMsg
+          ? `Error ${status ?? ''}: ${serverMsg}`
+          : 'Something went wrong. Please check your connection and try again.',
+      );
     } finally {
       setSubmitting(false);
     }

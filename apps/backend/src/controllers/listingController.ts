@@ -11,6 +11,21 @@ import {
 } from '../services/listingService';
 import { uploadImageToS3 } from '../lib/s3';
 import { Condition, ListingStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Accepts either a UUID or a slug — always returns the category UUID. */
+async function resolveCategoryId(value: string): Promise<string> {
+  if (UUID_REGEX.test(value)) {
+    const exists = await prisma.category.findUnique({ where: { id: value }, select: { id: true } });
+    if (!exists) throw new AppError(400, 'VALIDATION_ERROR', 'Category not found');
+    return value;
+  }
+  const cat = await prisma.category.findUnique({ where: { slug: value }, select: { id: true } });
+  if (!cat) throw new AppError(400, 'VALIDATION_ERROR', `Category not found: ${value}`);
+  return cat.id;
+}
 
 const MAX_IMAGES = 8;
 
@@ -21,7 +36,7 @@ const createListingSchema = z.object({
   condition: z.nativeEnum(Condition),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
-  categoryId: z.string().uuid(),
+  categoryId: z.string().min(1),
 });
 
 const updateListingSchema = createListingSchema.partial();
@@ -62,7 +77,8 @@ export async function createListingHandler(
       throw new AppError(400, 'VALIDATION_ERROR', 'At least one image is required');
     }
 
-    const listing = await createListing(req.dbUser!.id, { ...parsed.data, imageUrls });
+    const categoryId = await resolveCategoryId(parsed.data.categoryId);
+    const listing = await createListing(req.dbUser!.id, { ...parsed.data, categoryId, imageUrls });
     res.status(201).json({ listing });
   } catch (err) {
     next(err);
@@ -95,9 +111,13 @@ export async function updateListingHandler(
     }
 
     const imageUrls = req.files ? await processUploadedImages(req) : undefined;
+    const categoryId = parsed.data.categoryId
+      ? await resolveCategoryId(parsed.data.categoryId)
+      : undefined;
 
     const listing = await updateListing(req.params.id, req.dbUser!.id, {
       ...parsed.data,
+      ...(categoryId !== undefined && { categoryId }),
       ...(imageUrls !== undefined && { imageUrls }),
     }).catch(handleOwnershipError);
 
