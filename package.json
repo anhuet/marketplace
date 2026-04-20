@@ -10,10 +10,10 @@
     "@types/express": "4.17.25",
     "@types/multer": "1.4.13",
     "typescript": "5.3.3",
-    "@smithy/types": "^3.0.0",
-    "@smithy/middleware-stack": "^3.0.0",
+    "@smithy/types": "^4.0.0",
+    "@smithy/middleware-stack": "^4.0.0",
     "@smithy/protocol-http": "^4.0.0",
-    "@smithy/smithy-client": "^3.0.0"
+    "@smithy/smithy-client": "^4.0.0"
   },
   "scripts": {
     "postinstall": "bash scripts/fix-hoisting.sh",
