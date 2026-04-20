@@ -16,7 +16,7 @@ import { ConversationWithDetails, ListingStatus } from '@marketplace/shared';
 import { api } from '../../lib/api';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
-import { ProfileStackParamList } from '../../navigation/types';
+import { MessagesStackParamList, ProfileStackParamList } from '../../navigation/types';
 import { colors, spacing, radius, typography } from '../../theme/tokens';
 
 // Raw shape returned by GET /api/v1/conversations — last message comes back in a `messages` array
@@ -136,7 +136,7 @@ function ConversationRow({
 }
 
 export default function ConversationListScreen(): React.JSX.Element {
-  const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList & MessagesStackParamList>>();
   const currentUser = useAuthStore((s) => s.user);
   const { conversations, setConversations } = useChatStore();
   const [loading, setLoading] = React.useState(false);

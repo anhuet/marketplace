@@ -16,10 +16,10 @@ export type BrowseStackParamList = {
   ChatThread: { conversationId: string; listingTitle: string };
 };
 
-// Search Stack
-export type SearchStackParamList = {
-  Search: { query?: string };
-  ListingDetail: { listingId: string };
+// Messages Stack
+export type MessagesStackParamList = {
+  Messages: undefined;
+  ChatThread: { conversationId: string; listingTitle: string };
 };
 
 // Sell Stack
@@ -32,17 +32,25 @@ export type ProfileStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   Settings: undefined;
+  MyListings: undefined;
   ConversationList: undefined;
   ChatThread: { conversationId: string; listingTitle: string };
   UserProfile: { userId: string };
   ListingDetail: { listingId: string };
 };
 
+// Saved Stack
+export type SavedStackParamList = {
+  Saved: undefined;
+  ListingDetail: { listingId: string };
+};
+
 // Main Tab Navigator
 export type MainTabParamList = {
   HomeTab: undefined;
-  SearchTab: undefined;
+  MessagesTab: undefined;
   SellTab: undefined;
+  SavedTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -62,9 +70,15 @@ export type BrowseStackScreenProps<T extends keyof BrowseStackParamList> =
     BottomTabScreenProps<MainTabParamList>
   >;
 
-export type SearchStackScreenProps<T extends keyof SearchStackParamList> =
+export type MessagesStackScreenProps<T extends keyof MessagesStackParamList> =
   CompositeScreenProps<
-    NativeStackScreenProps<SearchStackParamList, T>,
+    NativeStackScreenProps<MessagesStackParamList, T>,
+    BottomTabScreenProps<MainTabParamList>
+  >;
+
+export type SavedStackScreenProps<T extends keyof SavedStackParamList> =
+  CompositeScreenProps<
+    NativeStackScreenProps<SavedStackParamList, T>,
     BottomTabScreenProps<MainTabParamList>
   >;
 

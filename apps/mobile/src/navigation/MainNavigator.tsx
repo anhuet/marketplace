@@ -1,45 +1,45 @@
 import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import {
   MainTabParamList,
   BrowseStackParamList,
-  SearchStackParamList,
+  MessagesStackParamList,
   SellStackParamList,
+  SavedStackParamList,
   ProfileStackParamList,
 } from './types';
-import { colors } from '../theme/tokens';
+import { colors, spacing } from '../theme/tokens';
 
 import BrowseScreen from '../screens/browse/BrowseScreen';
 import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
-import SearchScreen from '../screens/search/SearchScreen';
 import PostListingScreen from '../screens/sell/PostListingScreen';
+import SavedScreen from '../screens/saved/SavedScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ConversationListScreen from '../screens/chat/ConversationListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
 import UserProfileScreen from '../screens/profile/UserProfileScreen';
+import MyListingsScreen from '../screens/profile/MyListingsScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const BrowseStack = createNativeStackNavigator<BrowseStackParamList>();
-const SearchStack = createNativeStackNavigator<SearchStackParamList>();
+const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 const SellStack = createNativeStackNavigator<SellStackParamList>();
+const SavedStack = createNativeStackNavigator<SavedStackParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+
+// ─── Stack navigators ─────────────────────────────────────────────────────────
 
 function BrowseNavigator() {
   return (
     <BrowseStack.Navigator>
-      <BrowseStack.Screen
-        name="Browse"
-        component={BrowseScreen}
-        options={{ headerShown: false }}
-      />
-      <BrowseStack.Screen
-        name="ListingDetail"
-        component={ListingDetailScreen}
-        options={{ title: '' }}
-      />
+      <BrowseStack.Screen name="Browse" component={BrowseScreen} options={{ headerShown: false }} />
+      <BrowseStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
       <BrowseStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
@@ -49,91 +49,277 @@ function BrowseNavigator() {
   );
 }
 
-function SearchNavigator() {
+function MessagesNavigator() {
   return (
-    <SearchStack.Navigator>
-      <SearchStack.Screen
-        name="Search"
-        component={SearchScreen}
-        options={{ headerShown: false }}
+    <MessagesStack.Navigator>
+      <MessagesStack.Screen name="Messages" component={ConversationListScreen} options={{ title: 'Messages' }} />
+      <MessagesStack.Screen
+        name="ChatThread"
+        component={ChatThreadScreen}
+        options={({ route }) => ({ title: route.params.listingTitle })}
       />
-      <SearchStack.Screen
-        name="ListingDetail"
-        component={ListingDetailScreen}
-        options={{ title: '' }}
-      />
-    </SearchStack.Navigator>
+    </MessagesStack.Navigator>
   );
 }
 
 function SellNavigator() {
   return (
     <SellStack.Navigator>
-      <SellStack.Screen
-        name="PostListing"
-        component={PostListingScreen}
-        options={{ title: 'New Listing' }}
-      />
+      <SellStack.Screen name="PostListing" component={PostListingScreen} options={{ title: 'New Listing' }} />
     </SellStack.Navigator>
+  );
+}
+
+function SavedNavigator() {
+  return (
+    <SavedStack.Navigator>
+      <SavedStack.Screen name="Saved" component={SavedScreen} options={{ headerShown: false }} />
+      <SavedStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
+    </SavedStack.Navigator>
   );
 }
 
 function ProfileNavigator() {
   return (
     <ProfileStack.Navigator>
-      <ProfileStack.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
-        name="EditProfile"
-        component={EditProfileScreen}
-        options={{ title: 'Edit Profile' }}
-      />
-      <ProfileStack.Screen
-        name="ConversationList"
-        component={ConversationListScreen}
-        options={{ title: 'Messages' }}
-      />
+      <ProfileStack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
+      <ProfileStack.Screen name="ConversationList" component={ConversationListScreen} options={{ title: 'Messages' }} />
       <ProfileStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
         options={({ route }) => ({ title: route.params.listingTitle })}
       />
-      <ProfileStack.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{ title: 'Settings' }}
-      />
-      <ProfileStack.Screen
-        name="UserProfile"
-        component={UserProfileScreen}
-        options={{ title: '' }}
-      />
-      <ProfileStack.Screen
-        name="ListingDetail"
-        component={ListingDetailScreen}
-        options={{ title: '' }}
-      />
+      <ProfileStack.Screen name="MyListings" component={MyListingsScreen} options={{ title: 'My Listings' }} />
+      <ProfileStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <ProfileStack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
+      <ProfileStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
     </ProfileStack.Navigator>
   );
 }
 
+// ─── Tab icons ────────────────────────────────────────────────────────────────
+
+const TAB_ICON_SIZE = 22;
+
+function HomeIcon({ focused }: { focused: boolean }) {
+  return (
+    <Ionicons
+      name={focused ? 'home' : 'home-outline'}
+      size={TAB_ICON_SIZE}
+      color={focused ? colors.primaryDark : colors.secondary}
+    />
+  );
+}
+
+function MessagesIcon({ focused }: { focused: boolean }) {
+  return (
+    <Ionicons
+      name={focused ? 'chatbubble' : 'chatbubble-outline'}
+      size={TAB_ICON_SIZE}
+      color={focused ? colors.primaryDark : colors.secondary}
+    />
+  );
+}
+
+function SavedIcon({ focused }: { focused: boolean }) {
+  return (
+    <Ionicons
+      name={focused ? 'heart' : 'heart-outline'}
+      size={TAB_ICON_SIZE}
+      color={focused ? colors.primaryDark : colors.secondary}
+    />
+  );
+}
+
+function ProfileIcon({ focused }: { focused: boolean }) {
+  return (
+    <Ionicons
+      name={focused ? 'person-circle' : 'person-circle-outline'}
+      size={TAB_ICON_SIZE + 2}
+      color={focused ? colors.primaryDark : colors.secondary}
+    />
+  );
+}
+
+// ─── Custom tab bar ───────────────────────────────────────────────────────────
+
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  return (
+    <View style={tabBarStyles.container}>
+      {state.routes.map((route, index) => {
+        const { options } = descriptors[route.key];
+        const isFocused = state.index === index;
+        const isSell = route.name === 'SellTab';
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        if (isSell) {
+          return (
+            <TouchableOpacity
+              key={route.key}
+              style={tabBarStyles.sellButton}
+              onPress={onPress}
+              accessibilityRole="button"
+              accessibilityLabel="Sell"
+              accessibilityState={{ selected: isFocused }}
+            >
+              <View style={tabBarStyles.sellCircle}>
+                <Text style={tabBarStyles.sellIcon}>+</Text>
+              </View>
+              <Text style={tabBarStyles.sellLabel}>SELL</Text>
+            </TouchableOpacity>
+          );
+        }
+
+        const label =
+          typeof options.tabBarLabel === 'string'
+            ? options.tabBarLabel
+            : typeof options.title === 'string'
+            ? options.title
+            : route.name.replace('Tab', '');
+
+        const icon = options.tabBarIcon
+          ? options.tabBarIcon({ focused: isFocused, color: '', size: 24 })
+          : null;
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            style={tabBarStyles.tab}
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: isFocused }}
+          >
+            {icon}
+            <Text style={[tabBarStyles.label, isFocused && tabBarStyles.labelFocused]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+const tabBarStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'flex-end',
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: colors.secondary,
+    letterSpacing: 0.3,
+  },
+  labelFocused: {
+    color: colors.primaryDark,
+    fontWeight: '600',
+  },
+  // Sell button — elevated circle
+  sellButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    marginTop: -16,
+  },
+  sellCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Shadow
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  sellIcon: {
+    fontSize: 28,
+    color: colors.surface,
+    lineHeight: 32,
+    fontWeight: '300',
+  },
+  sellLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primaryDark,
+    letterSpacing: 0.8,
+  },
+});
+
+// ─── Main navigator ───────────────────────────────────────────────────────────
+
 export default function MainNavigator(): React.JSX.Element {
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primaryDark,
-        tabBarInactiveTintColor: colors.secondary,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-      }}
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="HomeTab" component={BrowseNavigator} options={{ title: 'Home' }} />
-      <Tab.Screen name="SearchTab" component={SearchNavigator} options={{ title: 'Search' }} />
-      <Tab.Screen name="SellTab" component={SellNavigator} options={{ title: 'Sell' }} />
-      <Tab.Screen name="ProfileTab" component={ProfileNavigator} options={{ title: 'Profile' }} />
+      <Tab.Screen
+        name="HomeTab"
+        component={BrowseNavigator}
+        options={{
+          title: 'HOME',
+          tabBarIcon: ({ focused }) => <HomeIcon focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="MessagesTab"
+        component={MessagesNavigator}
+        options={{
+          title: 'MESSAGES',
+          tabBarIcon: ({ focused }) => <MessagesIcon focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="SellTab"
+        component={SellNavigator}
+        options={{ title: 'SELL' }}
+      />
+      <Tab.Screen
+        name="SavedTab"
+        component={SavedNavigator}
+        options={{
+          title: 'SAVED',
+          tabBarIcon: ({ focused }) => <SavedIcon focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="ProfileTab"
+        component={ProfileNavigator}
+        options={{
+          title: 'PROFILE',
+          tabBarIcon: ({ focused }) => <ProfileIcon focused={focused} />,
+        }}
+      />
     </Tab.Navigator>
   );
 }
