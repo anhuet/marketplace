@@ -32,6 +32,7 @@ interface RawConversation {
     status: string;
     sellerId: string;
     images: Array<{ id: string; url: string; order: number }>;
+    seller?: { id: string; displayName: string; avatarUrl: string | null };
   };
   buyer: { id: string; displayName: string; avatarUrl: string | null };
   messages: Array<{
@@ -67,12 +68,12 @@ function ConversationRow({
   currentUserId,
   onPress,
 }: ConversationRowProps): React.JSX.Element {
-  // When the current user is the buyer, the other party is the seller.
-  // The seller's display name is not returned directly in this payload shape,
-  // so we use "Seller" as a label in that case. When the current user is
-  // the seller, the other party is the buyer and we have their name.
-  const participantLabel =
-    conversation.buyer.id === currentUserId ? 'Seller' : conversation.buyer.displayName;
+  // Show the other party's name: if current user is the buyer, show seller name; otherwise show buyer name.
+  const isBuyer = conversation.buyer.id === currentUserId;
+  const rawConv = conversation as unknown as { listing: RawConversation['listing'] };
+  const participantLabel = isBuyer
+    ? (rawConv.listing.seller?.displayName ?? 'Seller')
+    : conversation.buyer.displayName;
 
   const coverImage = conversation.listing.images.find(
     (img: { id: string; url: string; order: number }) => img.order === 0,

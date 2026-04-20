@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { Message } from '@prisma/client';
+import { getPresignedUrl } from '../lib/s3';
 
 export async function findOrCreateConversation(listingId: string, buyerId: string) {
   // Upsert: unique constraint on (listingId, buyerId)
@@ -38,6 +39,9 @@ export async function getUserConversations(userId: string) {
           status: true,
           sellerId: true,
           images: { orderBy: { order: 'asc' }, take: 1 },
+          seller: {
+            select: { id: true, displayName: true, avatarUrl: true },
+          },
         },
       },
       buyer: {
@@ -51,8 +55,8 @@ export async function getUserConversations(userId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  // Attach unread count per conversation
-  const withUnread = await Promise.all(
+  // Presign cover images + attach unread count per conversation
+  const withPresignedAndUnread = await Promise.all(
     conversations.map(async (conv) => {
       const unreadCount = await prisma.message.count({
         where: {
@@ -61,11 +65,29 @@ export async function getUserConversations(userId: string) {
           readAt: null,
         },
       });
-      return { ...conv, unreadCount };
+
+      // Presign the cover image URL
+      const images = await Promise.all(
+        conv.listing.images.map(async (img) => {
+          let url = img.url;
+          try {
+            url = await getPresignedUrl(img.url);
+          } catch {
+            // fall back to stored URL
+          }
+          return { ...img, url };
+        }),
+      );
+
+      return {
+        ...conv,
+        listing: { ...conv.listing, images },
+        unreadCount,
+      };
     }),
   );
 
-  return withUnread;
+  return withPresignedAndUnread;
 }
 
 export async function getConversationMessages(
