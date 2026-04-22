@@ -2,6 +2,7 @@ import { Router, RequestHandler } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
 import { attachUser } from '../middleware/attachUser';
+import { requireActiveUser } from '../middleware/requireActiveUser';
 import {
   createListingHandler,
   getListingHandler,
@@ -36,8 +37,8 @@ router.get('/seller/:sellerId', getSellerListingsHandler);
 router.get('/:id', getListingHandler);
 
 // Authenticated routes
-router.post('/', requireAuth, attachUser, uploadImages, createListingHandler);
-router.put('/:id', requireAuth, attachUser, uploadImages, updateListingHandler);
+router.post('/', requireAuth, attachUser, requireActiveUser, uploadImages, createListingHandler);
+router.put('/:id', requireAuth, attachUser, requireActiveUser, uploadImages, updateListingHandler);
 router.delete('/:id', requireAuth, attachUser, deleteListingHandler);
 router.patch('/:id/status', requireAuth, attachUser, updateListingStatusHandler);
 router.get('/:id/buyers', requireAuth, attachUser, getListingBuyersHandler);
