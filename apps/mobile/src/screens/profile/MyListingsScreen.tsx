@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
 
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
@@ -176,6 +176,9 @@ export default function MyListingsScreen({ navigation }: Props): React.JSX.Eleme
             <Image
               source={{ uri: coverImage }}
               style={styles.thumbnail}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
               accessibilityLabel={`${item.title} photo`}
             />
           ) : (

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { api } from '../../lib/api';
@@ -84,9 +85,76 @@ type ListingFormValues = z.infer<typeof listingSchema>;
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PostListingScreen({ route, navigation }: Props): React.JSX.Element {
-  const { user } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const listingId = route?.params?.listingId;
   const isEditMode = Boolean(listingId);
+
+  // ── Invite code gate ────────────────────────────────────────────────────────
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const handleRedeemInvite = async () => {
+    const trimmed = inviteCode.trim();
+    if (!trimmed) {
+      setInviteError('Please enter an invite code.');
+      return;
+    }
+    setInviteLoading(true);
+    setInviteError(null);
+    try {
+      // Validate first
+      const validateRes = await api.validateInviteCode(trimmed);
+      if (!validateRes.data.valid) {
+        setInviteError(validateRes.data.reason ?? 'Invalid invite code.');
+        return;
+      }
+      // Redeem
+      await api.redeemInvite(trimmed);
+      // Refresh user profile
+      const meRes = await api.getMe();
+      updateUser(meRes.data.user);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setInviteError(
+        axiosErr?.response?.data?.error?.message ?? 'Failed to redeem invite code. Please try again.',
+      );
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  if (!user?.inviteCodeUsedId) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <View style={styles.inviteGateContainer}>
+          <Text style={styles.inviteGateTitle}>Invite Code Required</Text>
+          <Text style={styles.inviteGateDescription}>
+            You need to redeem an invite code before you can sell items. Ask a friend for their code to get started.
+          </Text>
+          <FormInput
+            label="Invite Code"
+            placeholder="e.g. MKT-XXXX-XXXX"
+            value={inviteCode}
+            onChangeText={(text) => {
+              setInviteCode(text);
+              setInviteError(null);
+            }}
+            error={inviteError ?? undefined}
+            autoCapitalize="characters"
+            returnKeyType="done"
+            accessibilityLabel="Invite code input"
+          />
+          <PrimaryButton
+            label="Activate Account"
+            loading={inviteLoading}
+            onPress={handleRedeemInvite}
+            accessibilityLabel="Redeem invite code"
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
   const [photosError, setPhotosError] = useState<string | null>(null);
@@ -94,6 +162,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   const [gps, setGps] = useState<GpsCoordinates | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [locationAddress, setLocationAddress] = useState<string | null>(null);
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -161,6 +230,32 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   useEffect(() => {
     captureLocation();
   }, [captureLocation]);
+
+  // ── Handle returned location from LocationPicker ────────────────────────
+
+  useEffect(() => {
+    const params = route?.params;
+    if (params?.pickedLatitude != null && params?.pickedLongitude != null) {
+      setGps({ latitude: params.pickedLatitude, longitude: params.pickedLongitude });
+      setLocationAddress(params.pickedAddress ?? null);
+      setGpsError(null);
+    }
+  }, [route?.params?.pickedLatitude, route?.params?.pickedLongitude, route?.params?.pickedAddress]);
+
+  // ── Reverse geocode initial GPS location ────────────────────────────────
+
+  useEffect(() => {
+    if (!gps || locationAddress) return;
+    Location.reverseGeocodeAsync({ latitude: gps.latitude, longitude: gps.longitude })
+      .then((results) => {
+        if (results.length > 0) {
+          const r = results[0];
+          const parts = [r.street, r.district, r.city, r.region, r.country].filter(Boolean);
+          setLocationAddress(parts.join(', '));
+        }
+      })
+      .catch(() => { /* silent */ });
+  }, [gps?.latitude, gps?.longitude]);
 
   // ── Edit mode: pre-fill form ─────────────────────────────────────────────
 
@@ -352,6 +447,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         await api.createListing(formData);
         reset();
         setPhotos([]);
+        setLocationAddress(null);
         Alert.alert('Listing Posted!', 'Your listing is now live.', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
@@ -383,6 +479,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       <Image
         source={{ uri: item.uri }}
         style={styles.thumbnail}
+        contentFit="cover"
+        transition={200}
+        cachePolicy="memory-disk"
         accessibilityLabel={`Photo ${index + 1}`}
       />
       <TouchableOpacity
@@ -625,43 +724,71 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
           {/* ── Location ── */}
           <Text style={[styles.sectionLabel, styles.sectionLabelSpacingTop]}>LOCATION</Text>
-          <View style={styles.locationRow}>
-            <View style={styles.locationInfo}>
-              {gpsLoading ? (
-                <ActivityIndicator size="small" color={colors.primaryDark} />
-              ) : gps ? (
-                <Text
-                  style={styles.locationText}
-                  accessibilityLabel={`Location: ${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
-                >
-                  {gps.latitude.toFixed(5)}, {gps.longitude.toFixed(5)}
-                </Text>
-              ) : (
-                <Text style={styles.locationMissing}>Location not captured</Text>
-              )}
-              {gpsError ? (
-                <Text
-                  style={styles.fieldError}
-                  accessibilityLiveRegion="polite"
-                  accessibilityRole="alert"
-                >
-                  {gpsError}
-                </Text>
-              ) : null}
+          {gpsLoading ? (
+            <View style={styles.locationLoadingContainer}>
+              <ActivityIndicator size="small" color={colors.primaryDark} />
+              <Text style={styles.locationLoadingText}>Getting your location...</Text>
             </View>
+          ) : gps ? (
             <TouchableOpacity
-              style={styles.locationRefreshButton}
-              onPress={captureLocation}
-              disabled={gpsLoading}
+              style={styles.mapPreviewContainer}
+              onPress={() => navigation.navigate('LocationPicker', { latitude: gps.latitude, longitude: gps.longitude })}
+              activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Use current location"
-              accessibilityHint="Refreshes your GPS coordinates"
+              accessibilityLabel="Change location on map"
             >
-              <Text style={styles.locationRefreshText}>
-                {gpsLoading ? 'Getting…' : 'Use Current'}
-              </Text>
+              <MapView
+                style={styles.mapPreview}
+                region={{
+                  latitude: gps.latitude,
+                  longitude: gps.longitude,
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.005,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+                pointerEvents="none"
+              >
+                <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
+              </MapView>
+              <View style={styles.mapOverlayRow}>
+                <View style={styles.mapAddressContainer}>
+                  <Text style={styles.mapAddressText} numberOfLines={1}>
+                    {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                  </Text>
+                </View>
+                <View style={styles.changeLocationBadge}>
+                  <Text style={styles.changeLocationText}>Change</Text>
+                </View>
+              </View>
             </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={styles.locationRow}>
+              <View style={styles.locationInfo}>
+                <Text style={styles.locationMissing}>Location not captured</Text>
+                {gpsError ? (
+                  <Text
+                    style={styles.fieldError}
+                    accessibilityLiveRegion="polite"
+                    accessibilityRole="alert"
+                  >
+                    {gpsError}
+                  </Text>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={styles.locationRefreshButton}
+                onPress={captureLocation}
+                disabled={gpsLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Use current location"
+              >
+                <Text style={styles.locationRefreshText}>Get Location</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* ── Submit ── */}
           <View style={styles.submitContainer}>
@@ -848,6 +975,58 @@ const styles = StyleSheet.create({
   },
 
   // Location
+  locationLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.base,
+    marginBottom: spacing.base,
+  },
+  locationLoadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  mapPreviewContainer: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.base,
+  },
+  mapPreview: {
+    height: 160,
+    width: '100%',
+  },
+  mapOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  mapAddressContainer: {
+    flex: 1,
+  },
+  mapAddressText: {
+    ...typography.label,
+    color: colors.textPrimary,
+  },
+  changeLocationBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryDark,
+  },
+  changeLocationText: {
+    ...typography.label,
+    color: colors.surface,
+    fontWeight: '600',
+  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -861,11 +1040,6 @@ const styles = StyleSheet.create({
   },
   locationInfo: {
     flex: 1,
-  },
-  locationText: {
-    ...typography.body,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
   },
   locationMissing: {
     ...typography.body,
@@ -887,5 +1061,24 @@ const styles = StyleSheet.create({
   // Submit
   submitContainer: {
     marginTop: spacing.lg,
+  },
+
+  // Invite gate
+  inviteGateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  inviteGateTitle: {
+    ...typography.heading,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  inviteGateDescription: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
   },
 });

@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/authStore';
@@ -86,7 +86,7 @@ export default function ProfileSetupScreen({ navigation: _navigation }: Props): 
             accessibilityHint="Opens your photo library to choose a profile picture"
           >
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} />
+              <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
             ) : (
               <View style={styles.avatarPlaceholder} />
             )}

@@ -2,11 +2,11 @@ import React, { memo } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   AccessibilityRole,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { ListingWithDetails, ListingImage } from '@marketplace/shared';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 
@@ -63,7 +63,9 @@ function ListingCard({ listing, onPress }: ListingCardProps): React.JSX.Element 
           <Image
             source={{ uri: coverImageUrl }}
             style={styles.image}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
             accessibilityLabel={`Photo of ${listing.title}`}
           />
         ) : (

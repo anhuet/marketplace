@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -178,6 +178,9 @@ export default function UserProfileScreen(): React.JSX.Element {
             <Image
               source={{ uri: item.reviewer.avatarUrl }}
               style={styles.reviewerAvatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
               accessibilityLabel={`${item.reviewer.displayName}'s avatar`}
             />
           ) : (
@@ -242,6 +245,9 @@ export default function UserProfileScreen(): React.JSX.Element {
             <Image
               source={{ uri: profile.avatarUrl }}
               style={styles.avatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
               accessibilityLabel={`${profile.displayName}'s profile photo`}
             />
           ) : (

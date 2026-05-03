@@ -4,7 +4,6 @@ import {
   AlertButton,
   Dimensions,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +16,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
@@ -134,7 +134,9 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
           <Image
             source={{ uri: item.url }}
             style={styles.carouselImage}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
             accessibilityLabel="Listing photo"
           />
         )}
@@ -267,9 +269,10 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
           onPress: async () => {
             try {
               setMarkSoldLoading(true);
-              await api.markListingSold(listing.id, buyerId);
+              const res = await api.markListingSold(listing.id, buyerId);
+              const updated = (res.data as { listing: ListingWithDetails }).listing;
               setListing((prev: ListingWithDetails | null) =>
-                prev ? { ...prev, status: 'SOLD' as const, buyerId: buyerId ?? null } : prev,
+                prev ? { ...prev, ...updated } : prev,
               );
             } catch {
               Alert.alert('Error', 'Could not update listing status. Please try again.');
@@ -429,6 +432,9 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
               <Image
                 source={{ uri: listing.seller.avatarUrl }}
                 style={styles.avatar}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
                 accessibilityLabel={`${listing.seller.displayName} avatar`}
               />
             ) : (
@@ -483,7 +489,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
                   </Text>
                 </TouchableOpacity>
               </>
-            ) : (
+            ) : currentUser?.inviteCodeUsedId ? (
               <PrimaryButton
                 label="Message Seller"
                 onPress={handleMessageSeller}
@@ -492,6 +498,13 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
                 style={styles.actionButton}
                 accessibilityHint="Opens a chat thread with the seller"
               />
+            ) : (
+              <View style={styles.inactiveNotice}>
+                <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.inactiveNoticeText}>
+                  Activate your account with an invite code to message sellers
+                </Text>
+              </View>
             )}
 
             {/* Leave a Review — visible to the buyer when listing is SOLD */}
@@ -507,11 +520,32 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
                   })
                 }
                 accessibilityRole="button"
-                accessibilityLabel="Leave a Review"
-                accessibilityHint="Opens the review form for this transaction"
+                accessibilityLabel="Review Seller"
+                accessibilityHint="Opens the review form to rate the seller"
               >
                 <Ionicons name="star-outline" size={18} color={colors.primaryDark} />
-                <Text style={styles.reviewButtonText}>Leave a Review</Text>
+                <Text style={styles.reviewButtonText}>Review Seller</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Review Buyer — visible to the seller when listing is SOLD with a buyer */}
+            {isSold && isOwner && listing.buyer && (
+              <TouchableOpacity
+                style={styles.reviewButton}
+                onPress={() =>
+                  navigation.navigate('WriteReview', {
+                    listingId: listing.id,
+                    revieweeId: listing.buyer!.id,
+                    revieweeName: listing.buyer!.displayName,
+                    listingTitle: listing.title,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Review Buyer"
+                accessibilityHint="Opens the review form to rate the buyer"
+              >
+                <Ionicons name="star-outline" size={18} color={colors.primaryDark} />
+                <Text style={styles.reviewButtonText}>Review Buyer</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -785,5 +819,19 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  inactiveNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.base,
+    width: '100%',
+  },
+  inactiveNoticeText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
   },
 });

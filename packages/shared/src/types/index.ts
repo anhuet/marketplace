@@ -8,6 +8,7 @@ export interface User {
   bio: string | null;
   averageRating: number;
   ratingCount: number;
+  inviteCodeUsedId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,6 +52,7 @@ export interface Listing {
 
 export interface ListingWithDetails extends Listing {
   seller: PublicUser;
+  buyer: PublicUser | null;
   images: ListingImage[];
   category: Category;
   distanceKm?: number; // Computed from GPS query

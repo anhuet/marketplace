@@ -2,12 +2,12 @@ import React, { useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -94,6 +94,9 @@ function ConversationRow({
         <Image
           source={{ uri: coverImage.url }}
           style={styles.thumbnail}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
           accessibilityLabel={`Thumbnail for ${conversation.listing.title}`}
         />
       ) : (

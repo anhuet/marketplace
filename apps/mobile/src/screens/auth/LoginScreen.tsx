@@ -29,7 +29,10 @@ const discovery = {
   tokenEndpoint: `https://${domain}/oauth/token`,
 };
 
-const redirectUri = AuthSession.makeRedirectUri({ scheme: 'marketplace' });
+const redirectUri = AuthSession.makeRedirectUri({
+  scheme: 'marketplace',
+  path: 'auth/callback',
+});
 
 // DEV ONLY — mock user for UI preview without a running backend
 const DEV_BYPASS = false;
@@ -42,6 +45,7 @@ const DEV_MOCK_USER: User = {
   bio: null,
   averageRating: 4.5,
   ratingCount: 12,
+  inviteCodeUsedId: 'dev-invite-001',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -121,8 +125,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
       setAuth(meResponse.data.user, tokenResponse.accessToken);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
-      console.log('[Login] ERROR =', message);
-      setError(`DEBUG: ${message}`);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -168,6 +171,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
               <Text style={styles.signupLinkBold}>Create one</Text>
             </Text>
           </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

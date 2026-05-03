@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { validateInviteCode, redeemInviteCode } from '../services/inviteCodeService';
+import {
+  validateInviteCode,
+  redeemInviteCode,
+  createInviteCodeForUser,
+} from '../services/inviteCodeService';
 import { prisma } from '../lib/prisma';
 
 const validateInviteSchema = z.object({
@@ -67,7 +71,22 @@ export async function redeemInvite(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    await redeemInviteCode(code, userId);
+    try {
+      await redeemInviteCode(code, userId);
+    } catch (redeemErr: unknown) {
+      const message = redeemErr instanceof Error ? redeemErr.message : 'Failed to redeem invite code';
+      if (message.includes('your own invite code')) {
+        res.status(400).json({
+          error: { code: 'VALIDATION_ERROR', message },
+        });
+        return;
+      }
+      throw redeemErr;
+    }
+
+    // Now that user is active, generate their own invite code to share
+    await createInviteCodeForUser(userId);
+
     res.json({ success: true });
   } catch (err) {
     next(err);

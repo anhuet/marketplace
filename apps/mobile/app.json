@@ -6,18 +6,32 @@
     "scheme": "marketplace",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.marketplace.app"
+      "bundleIdentifier": "com.singlegrey.marketplace",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "splash": {
+      "backgroundColor": "#F8F9FA",
+      "resizeMode": "contain"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F8F9FA"
       },
-      "package": "com.marketplace.app"
+      "package": "com.marketplace.app",
+      "usesCleartextTraffic": true
     },
     "plugins": [
+      "./plugins/fix-podfile.js",
       "expo-notifications",
       [
         "expo-location",
@@ -31,7 +45,17 @@
           "photosPermission": "Allow Marketplace to access your photos to upload listing images.",
           "cameraPermission": "Allow Marketplace to use your camera to take listing photos."
         }
-      ]
-    ]
+      ],
+      "./plugins/allow-http.js"
+    ],
+    "extra": {
+      "auth0Domain": "",
+      "auth0ClientId": "",
+      "auth0Audience": "",
+      "eas": {
+        "projectId": "22f6b685-a63d-4754-879d-e58e4981d71a"
+      }
+    },
+    "owner": "0911085316"
   }
 }

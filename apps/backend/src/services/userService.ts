@@ -1,6 +1,5 @@
 import { prisma } from '../lib/prisma';
 import { User } from '@prisma/client';
-import { createInviteCodeForUser } from './inviteCodeService';
 
 export async function findOrCreateUser(
   auth0Id: string,
@@ -36,19 +35,14 @@ export async function findOrCreateUser(
     }
   }
 
-  // Create the user record
-  const user = await prisma.user.create({
+  // Create the user record (no invite code generated yet — code is created after activation)
+  return prisma.user.create({
     data: {
       auth0Id,
       email,
       displayName: displayName ?? (email ? email.split('@')[0] : auth0Id.split('|')[1] ?? 'User'),
     },
   });
-
-  // Auto-generate their invite code on first account creation
-  await createInviteCodeForUser(user.id);
-
-  return user;
 }
 
 export async function getUserById(id: string): Promise<User | null> {

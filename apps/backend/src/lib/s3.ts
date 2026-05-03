@@ -1,7 +1,7 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import path from 'path';
+import sharp from 'sharp';
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION ?? 'eu-west-1',
@@ -16,20 +16,43 @@ const CDN_URL =
   process.env.CDN_URL ??
   `https://${BUCKET}.s3.${process.env.AWS_REGION ?? 'eu-west-1'}.amazonaws.com`;
 
+const MAX_WIDTH = 1200;
+const MAX_HEIGHT = 1200;
+const JPEG_QUALITY = 80;
+
+/**
+ * Optimises an image buffer with sharp before uploading to S3.
+ *
+ * - Strips EXIF metadata (reduces size, removes GPS data)
+ * - Auto-rotates based on EXIF orientation
+ * - Resizes to fit within 1200×1200 (preserves aspect ratio, no upscale)
+ * - Converts to JPEG at quality 80 (~70-80 % smaller than unoptimised originals)
+ */
+async function optimiseImage(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .rotate()                        // auto-rotate from EXIF
+    .resize(MAX_WIDTH, MAX_HEIGHT, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+    .toBuffer();
+}
+
 export async function uploadImageToS3(
   buffer: Buffer,
-  originalName: string,
-  mimeType: string,
+  _originalName: string,
+  _mimeType: string,
 ): Promise<string> {
-  const ext = path.extname(originalName).toLowerCase() || '.jpg';
-  const key = `listings/${randomUUID()}${ext}`;
+  const optimised = await optimiseImage(buffer);
+  const key = `listings/${randomUUID()}.jpg`;
 
   await s3.send(
     new PutObjectCommand({
       Bucket: BUCKET,
       Key: key,
-      Body: buffer,
-      ContentType: mimeType,
+      Body: optimised,
+      ContentType: 'image/jpeg',
     }),
   );
 

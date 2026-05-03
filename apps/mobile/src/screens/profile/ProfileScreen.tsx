@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Platform,
   Share,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
@@ -193,6 +193,9 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
             <Image
               source={{ uri: item.reviewer.avatarUrl }}
               style={styles.reviewerAvatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
               accessibilityLabel={`${item.reviewer.displayName}'s avatar`}
             />
           ) : (
@@ -231,7 +234,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
           accessibilityHint="Opens the edit profile screen to update your avatar"
         >
           {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatar} accessibilityLabel="Your profile photo" />
+            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" accessibilityLabel="Your profile photo" />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarFallbackText}>
@@ -404,7 +407,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
   // ── Main render ─────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <FlatList
         data={[]}
         keyExtractor={() => ''}
@@ -421,7 +424,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const AVATAR_SIZE = 72;
+const AVATAR_SIZE = 80;
 const REVIEWER_AVATAR_SIZE = 36;
 
 const styles = StyleSheet.create({
@@ -437,7 +440,8 @@ const styles = StyleSheet.create({
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.base,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,

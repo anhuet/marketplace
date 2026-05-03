@@ -16,7 +16,7 @@
     "@smithy/smithy-client": "^4.0.0"
   },
   "scripts": {
-    "postinstall": "bash scripts/fix-hoisting.sh",
+    "postinstall": "bash scripts/fix-hoisting.sh && yarn workspace @marketplace/shared build",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "node_modules/.bin/tsc --noEmit -p tsconfig.base.json && yarn workspaces run typecheck",
     "format": "prettier --write .",

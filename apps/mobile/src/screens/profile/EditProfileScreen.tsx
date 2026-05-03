@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
 import { api } from '../../lib/api';
@@ -179,6 +179,9 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
                 <Image
                   source={{ uri: avatarUri }}
                   style={styles.avatar}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory-disk"
                   accessibilityLabel="Your profile photo"
                 />
               ) : (

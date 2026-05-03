@@ -1,0 +1,46 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "node": "20.18.0",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "node": "20.18.0",
+      "ios": {
+        "image": "macos-sonoma-14.4-xcode-15.3",
+        "cocoapods": "1.15.2"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://54.175.34.74/api/v1",
+        "EXPO_PUBLIC_AUTH0_DOMAIN": "marketplace-app.eu.auth0.com",
+        "EXPO_PUBLIC_AUTH0_CLIENT_ID": "KNISp79VFYp7A9C5vWYfXGyCKpI0DYA7",
+        "EXPO_PUBLIC_AUTH0_AUDIENCE": "marketplace"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "node": "20.18.0",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://54.175.34.74/api/v1",
+        "EXPO_PUBLIC_AUTH0_DOMAIN": "marketplace-app.eu.auth0.com",
+        "EXPO_PUBLIC_AUTH0_CLIENT_ID": "KNISp79VFYp7A9C5vWYfXGyCKpI0DYA7",
+        "EXPO_PUBLIC_AUTH0_AUDIENCE": "marketplace"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

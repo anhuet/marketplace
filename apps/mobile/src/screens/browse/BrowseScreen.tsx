@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Image,
   Linking,
   Modal,
   Platform,
@@ -29,7 +28,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../lib/api';
 import { useLocationStore } from '../../store/locationStore';
 import { useNotificationStore } from '../../store/notificationStore';
+import { Image } from 'expo-image';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
+import InactiveUserBanner from '../../components/InactiveUserBanner';
 import type { BrowseStackScreenProps } from '../../navigation/types';
 
 // -----------------------------------------------------------------
@@ -105,7 +106,7 @@ function GridItem({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={gridStyles.image} resizeMode="cover" />
+        <Image source={{ uri: coverUrl }} style={gridStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
       ) : (
         <View style={[gridStyles.image, gridStyles.imageFallback]}>
           <Text style={gridStyles.imageFallbackText}>No photo</Text>
@@ -204,7 +205,7 @@ function FeedItem({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={feedStyles.image} resizeMode="cover" />
+        <Image source={{ uri: coverUrl }} style={feedStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
       ) : (
         <View style={[feedStyles.image, feedStyles.imageFallback]}>
           <Text style={feedStyles.imageFallbackText}>No photo</Text>
@@ -310,7 +311,7 @@ function NearbyCard({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={nearbyStyles.image} resizeMode="cover" />
+        <Image source={{ uri: coverUrl }} style={nearbyStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
       ) : (
         <View style={[nearbyStyles.image, nearbyStyles.imageFallback]} />
       )}
@@ -751,6 +752,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
           />
         </View>
       </View>
+
+      {/* ── Inactive user banner ── */}
+      <InactiveUserBanner />
 
       {/* ── Content ── */}
       {isLoading && listings.length === 0 ? (

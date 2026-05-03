@@ -2,12 +2,12 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -65,7 +65,7 @@ function SavedListingCard({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={cardStyles.image} resizeMode="cover" />
+        <Image source={{ uri: coverUrl }} style={cardStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
       ) : (
         <View style={[cardStyles.image, cardStyles.imageFallback]}>
           <Text style={cardStyles.imageFallbackText}>No photo</Text>

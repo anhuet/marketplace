@@ -13,8 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
+import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
-import { api, apiClient } from '../../lib/api';
+import { api, apiClient, BASE_URL } from '../../lib/api';
 import PrimaryButton from '../../components/PrimaryButton';
 import FormInput from '../../components/FormInput';
 import { colors, spacing, typography } from '../../theme/tokens';
@@ -32,7 +33,10 @@ const discovery = {
   tokenEndpoint: `https://${domain}/oauth/token`,
 };
 
-const redirectUri = AuthSession.makeRedirectUri({ scheme: 'marketplace' });
+const redirectUri = AuthSession.makeRedirectUri({
+  scheme: 'marketplace',
+  path: 'auth/callback',
+});
 
 type Props = AuthStackScreenProps<'Signup'>;
 
@@ -50,7 +54,7 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       clientId,
       redirectUri,
       scopes: ['openid', 'profile', 'email'],
-      extraParams: { audience, prompt: 'login' },
+      extraParams: { audience, screen_hint: 'signup' },
     },
     discovery,
   );
@@ -71,8 +75,20 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
           try {
             const { data } = await api.validateInviteCode(code);
             setInviteValid(data.valid);
-          } catch {
+            if (!data.valid) {
+              setError(`Invite invalid: ${data.reason ?? 'unknown reason'}`);
+            } else {
+              setError('');
+            }
+          } catch (e) {
             setInviteValid(false);
+            if (axios.isAxiosError(e)) {
+              setError(
+                `Invite check failed:\nURL: ${e.config?.baseURL}${e.config?.url}\nStatus: ${e.response?.status ?? 'NO RESPONSE'}\nCode: ${e.code}\n${e.message}`,
+              );
+            } else {
+              setError(`Invite check error: ${e instanceof Error ? e.message : String(e)}`);
+            }
           } finally {
             setInviteChecking(false);
           }
@@ -150,9 +166,20 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       // Proceed to profile setup before entering main app
       navigation.navigate('ProfileSetup', { inviteCode });
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Signup failed. Please try again.';
-      setError(message);
+      let debugMsg = '';
+      if (axios.isAxiosError(err)) {
+        debugMsg = [
+          `URL: ${err.config?.baseURL}${err.config?.url}`,
+          `Method: ${err.config?.method?.toUpperCase()}`,
+          `Status: ${err.response?.status ?? 'NO RESPONSE'}`,
+          `Code: ${err.code}`,
+          `Message: ${err.message}`,
+          err.response?.data ? `Body: ${JSON.stringify(err.response.data).substring(0, 200)}` : '',
+        ].filter(Boolean).join('\n');
+      } else {
+        debugMsg = err instanceof Error ? err.message : String(err);
+      }
+      setError(debugMsg);
     } finally {
       setLoading(false);
     }
@@ -233,6 +260,10 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
               <Text style={styles.signInLinkBold}>Sign In</Text>
             </Text>
           </TouchableOpacity>
+
+          <Text style={styles.debugInfo} selectable>
+            {`--- DEBUG CONFIG ---\nAPI: ${BASE_URL}\nAuth0: ${domain || '(empty)'}\nClientID: ${clientId ? clientId.substring(0, 8) + '...' : '(empty)'}`}
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -284,5 +315,14 @@ const styles = StyleSheet.create({
   signInLinkBold: {
     color: colors.primaryDark,
     fontWeight: '600',
+  },
+  debugInfo: {
+    marginTop: spacing.xl,
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#999',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 6,
+    padding: spacing.sm,
   },
 });

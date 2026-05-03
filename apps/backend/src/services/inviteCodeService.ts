@@ -58,6 +58,11 @@ export async function redeemInviteCode(code: string, newUserId: string): Promise
     throw new Error('Invalid or already used invite code');
   }
 
+  // Prevent self-redemption
+  if (inviteCode.createdById === newUserId) {
+    throw new Error('You cannot use your own invite code');
+  }
+
   // Mark code as used and link to the new user atomically
   await prisma.$transaction([
     prisma.inviteCode.update({

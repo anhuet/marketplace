@@ -35,6 +35,15 @@ const listingInclude = {
       ratingCount: true,
     },
   },
+  buyer: {
+    select: {
+      id: true,
+      displayName: true,
+      avatarUrl: true,
+      averageRating: true,
+      ratingCount: true,
+    },
+  },
   category: true,
 };
 
@@ -137,10 +146,12 @@ export async function updateListingStatus(id: string, sellerId: string, status: 
   if (!listing || listing.status === ListingStatus.DELETED) return null;
   if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
 
-  return prisma.listing.update({
+  const updated = await prisma.listing.update({
     where: { id },
     data: { status, ...(buyerId !== undefined && { buyerId }) },
+    include: listingInclude,
   });
+  return presignListingImages(updated);
 }
 
 export async function getListingBuyers(listingId: string, sellerId: string) {
