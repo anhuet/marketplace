@@ -60,8 +60,6 @@ export async function getMyInviteCode(
 
     res.json({
       code: inviteCode.code,
-      usedAt: inviteCode.usedAt,
-      isUsed: inviteCode.usedAt !== null,
     });
   } catch (err) {
     next(err);

@@ -26,7 +26,6 @@ export interface InviteCode {
   id: string;
   code: string;
   createdById: string;
-  usedAt: string | null;
   createdAt: string;
 }
 

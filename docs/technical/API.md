@@ -54,7 +54,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### POST /api/v1/auth/validate-invite
 
 **Auth required**: No
-**Description**: Validates an invite code before the client redirects the user to Auth0 signup. Returns whether the code exists and is unused. Does not consume the code — call `redeem-invite` after the Auth0 account is created.
+**Description**: Validates an invite code before the client redirects the user to Auth0 signup. Returns whether the code exists. Codes are multi-use — a code that has already been redeemed by other users is still valid. Does not consume the code — call `redeem-invite` after the Auth0 account is created.
 
 **Request body**:
 ```json
@@ -71,7 +71,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ```
 
 **Error codes**:
-- `400` — Code not found or already used (error code `INVALID_INVITE_CODE`)
+- `400` — Code not found (error code `INVALID_INVITE_CODE`)
 - `400` — Validation error (missing `code` field)
 
 ---
@@ -79,7 +79,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### POST /api/v1/auth/redeem-invite
 
 **Auth required**: Yes
-**Description**: Redeems an invite code after the user has authenticated via Auth0 for the first time. Links the invite code to the newly created DB user record and marks it as used. Can only be called once per user.
+**Description**: Redeems an invite code after the user has authenticated via Auth0 for the first time. Links the invite code to the newly created DB user record. Can only be called once per user — the code itself is multi-use (unlimited users may redeem the same code), but each user may only redeem one code in their lifetime. Also auto-generates the user's own shareable invite code.
 
 **Request body**:
 ```json
@@ -96,7 +96,9 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ```
 
 **Error codes**:
-- `400` — Validation error
+- `400` — Code not found (error code `INVALID_INVITE_CODE`)
+- `400` — Self-redemption attempt — user tried to redeem their own code (error code `VALIDATION_ERROR`)
+- `400` — Validation error (missing `code` field)
 - `401` — Missing or invalid Auth0 Bearer token
 - `409` — User has already redeemed an invite code (error code `CONFLICT`)
 
@@ -136,7 +138,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### GET /api/v1/invites/validate/:code
 
 **Auth required**: No
-**Description**: Public endpoint to check whether an invite code is valid and unused. Safe to expose — does not reveal the owner or any sensitive data.
+**Description**: Public endpoint to check whether an invite code exists. Codes are multi-use — a code that has already been redeemed by other users is still valid. Safe to expose — does not reveal the owner or any sensitive data.
 
 **Path parameters**:
 - `code` — the invite code string (e.g. `MKT-XXXX-XXXX`)
@@ -152,7 +154,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ```json
 {
   "valid": false,
-  "reason": "string — human-readable reason (Invite code not found | Invite code has already been used)"
+  "reason": "string — human-readable reason (Invite code not found)"
 }
 ```
 
@@ -164,19 +166,19 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### GET /api/v1/invites/mine
 
 **Auth required**: Yes
-**Description**: Returns the authenticated user's own invite code. The code is auto-generated when the user's DB record is first created, so it always exists. The `isUsed` flag indicates whether someone has already used this code to sign up.
+**Description**: Returns the authenticated user's own shareable invite code. The code is multi-use — it can be redeemed by an unlimited number of new users. The code is auto-generated when the user first redeems an invite code. Users who have not yet redeemed an invite code receive a 403.
 
 **Response 200**:
 ```json
 {
-  "code": "string — the invite code (e.g. MKT-XXXX-XXXX)",
-  "usedAt": "string | null — ISO 8601 timestamp when the code was redeemed, or null",
-  "isUsed": "boolean"
+  "code": "string — the invite code (e.g. MKT-XXXX-XXXX)"
 }
 ```
 
 **Error codes**:
 - `401` — Missing or invalid Auth0 Bearer token
+- `403` — User has not yet redeemed an invite code (error code `INVITE_CODE_REQUIRED`)
+- `404` — Invite code not found (should not occur in normal operation)
 
 ---
 

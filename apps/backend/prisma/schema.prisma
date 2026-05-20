@@ -21,8 +21,8 @@ model User {
 
   // Relations
   inviteCodeCreated  InviteCode?  @relation("CreatedBy")
-  inviteCodeUsed     InviteCode?  @relation("UsedBy", fields: [inviteCodeUsedId], references: [id])
-  inviteCodeUsedId   String?      @unique @map("invite_code_used_id")
+  inviteCodeUsed     InviteCode?  @relation("RedeemedBy", fields: [inviteCodeUsedId], references: [id])
+  inviteCodeUsedId   String?      @map("invite_code_used_id")
 
   listings           Listing[]
   purchasedListings  Listing[]      @relation("Buyer")
@@ -40,8 +40,7 @@ model InviteCode {
   code        String    @unique
   createdBy   User      @relation("CreatedBy", fields: [createdById], references: [id])
   createdById String    @unique @map("created_by_id")
-  usedBy      User?     @relation("UsedBy")
-  usedAt      DateTime? @map("used_at")
+  redeemedBy  User[]    @relation("RedeemedBy")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   @@map("invite_codes")

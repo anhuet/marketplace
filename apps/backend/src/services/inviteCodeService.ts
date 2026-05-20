@@ -44,18 +44,14 @@ export async function validateInviteCode(
     return { valid: false, reason: 'Invite code not found' };
   }
 
-  if (inviteCode.usedAt !== null) {
-    return { valid: false, reason: 'Invite code has already been used' };
-  }
-
   return { valid: true };
 }
 
 export async function redeemInviteCode(code: string, newUserId: string): Promise<void> {
   const inviteCode = await prisma.inviteCode.findUnique({ where: { code } });
 
-  if (!inviteCode || inviteCode.usedAt !== null) {
-    throw new Error('Invalid or already used invite code');
+  if (!inviteCode) {
+    throw new Error('Invalid invite code');
   }
 
   // Prevent self-redemption
@@ -63,15 +59,9 @@ export async function redeemInviteCode(code: string, newUserId: string): Promise
     throw new Error('You cannot use your own invite code');
   }
 
-  // Mark code as used and link to the new user atomically
-  await prisma.$transaction([
-    prisma.inviteCode.update({
-      where: { id: inviteCode.id },
-      data: { usedAt: new Date() },
-    }),
-    prisma.user.update({
-      where: { id: newUserId },
-      data: { inviteCodeUsedId: inviteCode.id },
-    }),
-  ]);
+  // Link the redeemed code to the user (codes are multi-use; the user side is still 1:1)
+  await prisma.user.update({
+    where: { id: newUserId },
+    data: { inviteCodeUsedId: inviteCode.id },
+  });
 }

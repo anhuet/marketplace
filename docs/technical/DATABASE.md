@@ -11,7 +11,7 @@ Read by: @backend-developer (to write queries), @systems-architect (for scaling 
 > **Engine**: PostgreSQL 15 (AWS RDS, eu-west-1)
 > **ORM / Query layer**: Prisma 5.x
 > **Connection**: Via `DATABASE_URL` environment variable (see `.env.example`)
-> **Last updated**: 2026-03-29
+> **Last updated**: 2026-05-20
 
 ---
 
@@ -25,7 +25,7 @@ users ──< listings ──< listing_images
   │           └──< conversations ──< messages
   │           └──< reviews
   │
-  ├──── invite_codes (1:1 created, 1:1 used)
+  ├──── invite_codes (1:1 created, N:1 redeemed)
   └──< push_tokens
 
 categories ──< listings
@@ -33,7 +33,7 @@ categories ──< listings
 
 **Key relationships**:
 - `users` 1:1 `invite_codes` (created): each user may generate exactly one invite code
-- `users` 1:1 `invite_codes` (used): each user may have consumed exactly one invite code to register
+- `users` N:1 `invite_codes` (redeemed): many users may redeem the same invite code; each user records which code they used
 - `users` 1:N `listings`: a seller owns many listings
 - `listings` 1:N `listing_images`: each listing has ordered images
 - `listings` 1:N `conversations`: a listing may have many buyer inquiries, each scoped to one buyer
@@ -62,14 +62,14 @@ categories ──< listings
 | bio | text | NULL | Optional free-text self-description |
 | average_rating | float8 | NOT NULL, DEFAULT 0 | Cached mean of all `reviews.rating` values received. Updated by application on each new review — avoids aggregation on every profile read |
 | rating_count | int4 | NOT NULL, DEFAULT 0 | Count of reviews received. Updated alongside `average_rating` |
-| invite_code_used_id | uuid | UNIQUE, FK → invite_codes.id, NULL | The invite code the user redeemed at registration. NULL for the founding users seeded before invite enforcement |
+| invite_code_used_id | uuid | FK → invite_codes.id, NULL | The invite code the user redeemed at registration. NULL for founding users seeded before invite enforcement. No UNIQUE constraint — multiple users may reference the same code |
 | created_at | timestamptz | NOT NULL, DEFAULT now() | Record creation time |
 | updated_at | timestamptz | NOT NULL, DEFAULT now() | Last modification time (managed by Prisma `@updatedAt`) |
 
 **Indexes**:
 - Implicit unique index on `auth0_id` — lookup on every authenticated request
 - Implicit unique index on `email` — deduplication on registration
-- Implicit unique index on `invite_code_used_id` — enforces one-code-per-user
+- Plain FK index on `invite_code_used_id` — supports lookups from users to their redeemed code (no uniqueness; Prisma does not generate this automatically, so it may need a manual `CREATE INDEX` if query volume warrants it)
 
 **Relationships**:
 - `invite_code_used_id` → `invite_codes.id` (no cascade — retain invite record if user is deleted)
@@ -80,14 +80,13 @@ categories ──< listings
 
 ### invite_codes
 
-**Purpose**: Stores user-generated invite codes that gate new registrations. Each user may generate exactly one code; each code may be used exactly once. There is no expiry.
+**Purpose**: Stores user-generated invite codes that gate new registrations. Each user may generate exactly one code. Codes are reusable — there is no limit on how many users may redeem the same code, and no expiry.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | uuid | PK, NOT NULL, DEFAULT gen_random_uuid() | Primary key |
 | code | text | NOT NULL, UNIQUE | Human-readable invite string (e.g., `MKTPLACE-X7K2`) |
 | created_by_id | uuid | NOT NULL, UNIQUE, FK → users.id | The user who generated this code. UNIQUE enforces one code per user |
-| used_at | timestamptz | NULL | Timestamp of redemption. NULL means the code has not yet been used |
 | created_at | timestamptz | NOT NULL, DEFAULT now() | Code generation time |
 
 **Indexes**:
@@ -96,9 +95,9 @@ categories ──< listings
 
 **Relationships**:
 - `created_by_id` → `users.id` (no cascade — retain code history if creator is deleted)
-- `users.invite_code_used_id` → `invite_codes.id` — the reverse pointer on the `users` table indicates which code was used
+- `users.invite_code_used_id` → `invite_codes.id` — the reverse pointer on the `users` table records which code each user redeemed
 
-**Notes**: The `usedBy` relationship is navigated through `users.invite_code_used_id`. There is no `used_by_id` column on this table — the relationship is owned by `users` to avoid a circular FK dependency. Codes have no expiry by design (product decision). The combination of UNIQUE on `created_by_id` and UNIQUE on `users.invite_code_used_id` ensures: one code generated per user, one code consumed per user.
+**Notes**: The `used_at` column has been removed (migration `20260520000000_multi_use_invite_codes`). Codes are now unlimited-use — the only database-enforced invariant remaining is one code generated per user (UNIQUE on `created_by_id`). The many redeemers of a code are discoverable by querying `users WHERE invite_code_used_id = $codeId`. There is no `used_by_id` column on this table; the relationship is owned by `users` to avoid a circular FK dependency.
 
 ---
 
@@ -292,7 +291,10 @@ categories ──< listings
 
 | Migration File | Date | Description | Reversible | Deployment Risk |
 |----------------|------|-------------|------------|-----------------|
-| `001_initial_schema` | 2026-03-29 | Full initial schema: all 9 tables, enums, indexes, FK constraints | Yes | None — new database, no existing data |
+| `20260410170133_initial_schema` | 2026-04-10 | Full initial schema: all 9 tables, enums, indexes, FK constraints | Yes | None — new database, no existing data |
+| `20260421000000_add_saved_listings` | 2026-04-21 | Add `saved_listings` table for bookmarking listings | Yes — drop table | None — additive change |
+| `20260421100000_add_buyer_to_listing` | 2026-04-21 | Add nullable `buyer_id` column to `listings` | Yes — drop column | None — additive change |
+| `20260520000000_multi_use_invite_codes` | 2026-05-20 | Drop UNIQUE index on `users.invite_code_used_id`; drop `used_at` column from `invite_codes` — codes are now unlimited-use | Partial — index can be recreated; `used_at` data is permanently lost (4 rows affected in production) | Low — `DROP INDEX` is fast; `DROP COLUMN` acquires a brief ACCESS EXCLUSIVE lock but completes in milliseconds on a small table |
 
 ---
 
@@ -417,7 +419,14 @@ PostGIS is not assumed to be available on all RDS tiers. `latitude` and `longitu
 `average_rating` and `rating_count` are denormalised onto the `users` table. Recomputing them from `reviews` on every profile read is expensive and grows with the user's transaction history. The trade-off is that both fields must be updated atomically in the same transaction as a new review. Any bug that inserts a review without updating the cache produces drift — monitor with a periodic reconciliation job: `SELECT reviewee_id, COUNT(*), AVG(rating) FROM reviews GROUP BY reviewee_id`.
 
 ### Invite code ownership model
-The relationship between a code and its creator is owned by `invite_codes.created_by_id` (UNIQUE FK to `users`). The relationship between a user and the code they used to register is owned by `users.invite_code_used_id` (UNIQUE FK to `invite_codes`). This avoids a circular dependency and makes both invariants enforced at the database level without triggers.
+Codes are **multi-use** (unlimited redemptions, no expiry). There are two relationships:
+
+1. **Creator**: owned by `invite_codes.created_by_id` (UNIQUE FK → `users`). Enforces that every user generates at most one code.
+2. **Redeemer**: owned by `users.invite_code_used_id` (plain nullable FK → `invite_codes`). Records which code each user redeemed at registration. There is no UNIQUE constraint here, so any number of users may reference the same code. NULL means the user was seeded before invite enforcement.
+
+The `used_at` timestamp that previously marked a code as "consumed" was dropped in migration `20260520000000_multi_use_invite_codes`. The remaining database-enforced invariant is: one code generated per user (UNIQUE on `created_by_id`). Rate limiting and abuse prevention for code reuse must be handled at the application layer if needed in future — there is deliberately no DB-level counter or max-use ceiling.
+
+To find all users who redeemed a specific code: `SELECT id, display_name FROM users WHERE invite_code_used_id = $codeId`.
 
 ### Conversations uniqueness
 The UNIQUE constraint on `(listing_id, buyer_id)` in `conversations` means the API can safely use an upsert to find-or-create a conversation, and duplicate conversation creation by the client is idempotent. The seller identity is not duplicated onto the conversation row — it is resolved via `listings.seller_id`.

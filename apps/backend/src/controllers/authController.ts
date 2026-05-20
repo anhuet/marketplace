@@ -74,10 +74,17 @@ export async function redeemInvite(req: Request, res: Response, next: NextFuncti
     try {
       await redeemInviteCode(code, userId);
     } catch (redeemErr: unknown) {
-      const message = redeemErr instanceof Error ? redeemErr.message : 'Failed to redeem invite code';
+      const message =
+        redeemErr instanceof Error ? redeemErr.message : 'Failed to redeem invite code';
       if (message.includes('your own invite code')) {
         res.status(400).json({
           error: { code: 'VALIDATION_ERROR', message },
+        });
+        return;
+      }
+      if (message.includes('Invalid invite code')) {
+        res.status(400).json({
+          error: { code: 'INVALID_INVITE_CODE', message },
         });
         return;
       }
