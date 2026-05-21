@@ -54,7 +54,7 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       clientId,
       redirectUri,
       scopes: ['openid', 'profile', 'email'],
-      extraParams: { audience, screen_hint: 'signup' },
+      extraParams: { audience, screen_hint: 'signup', prompt: 'login' },
     },
     discovery,
   );
