@@ -150,7 +150,7 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
 
       // Token is not yet in the store — pass it explicitly for this first call.
       // Auto-creates the DB user record on first call.
-      const meResponse = await apiClient.get<{ user: User }>('/auth/me', {
+      await apiClient.get<{ user: User }>('/auth/me', {
         headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
       });
 
@@ -160,6 +160,11 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
         { code: inviteCode },
         { headers: { Authorization: `Bearer ${tokenResponse.accessToken}` } },
       );
+
+      // Re-fetch user after redeem so inviteCodeUsedId is populated
+      const meResponse = await apiClient.get<{ user: User }>('/auth/me', {
+        headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+      });
 
       setAuth(meResponse.data.user, tokenResponse.accessToken);
 

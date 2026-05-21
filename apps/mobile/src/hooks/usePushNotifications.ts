@@ -19,6 +19,8 @@ Notifications.setNotificationHandler({
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
     };
   },
 });
@@ -36,7 +38,7 @@ type NotificationPayload = {
  * Routes into the ProfileTab stack so that ConversationList sits behind ChatThread in the back stack.
  */
 function handleNotificationNavigation(
-  navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList>>,
+  navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList> | null>,
   data: NotificationPayload,
 ): void {
   const nav = navigationRef.current;
@@ -122,7 +124,7 @@ async function ensureAndroidChannel(): Promise<void> {
  *       and FCM/APNs will reject it in production. QA must test on a real device.
  */
 export function usePushNotifications(
-  navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList>>,
+  navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList> | null>,
 ): void {
   const { pushToken, setPushToken } = useAuthStore();
   // Keep a mutable ref so listeners always access the latest stored token

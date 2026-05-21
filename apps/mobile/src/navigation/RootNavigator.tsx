@@ -1,12 +1,14 @@
-import React, { useEffect, useRef } from 'react';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import { NavigationContainer, NavigationContainerRef, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Message } from '@marketplace/shared';
 import { RootStackParamList } from './types';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
 import { useAuthStore } from '../store/authStore';
+import { useChatStore } from '../store/chatStore';
 import { useSavedStore } from '../store/savedStore';
-import { connectSocket, disconnectSocket } from '../lib/socket';
+import { connectSocket, disconnectSocket, getSocket } from '../lib/socket';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -18,7 +20,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 function AuthenticatedRoot({
   navigationRef,
 }: {
-  navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList>>;
+  navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList> | null>;
 }): React.JSX.Element {
   usePushNotifications(navigationRef);
   return <MainNavigator />;
@@ -26,7 +28,7 @@ function AuthenticatedRoot({
 
 export default function RootNavigator(): React.JSX.Element {
   const { isAuthenticated, token } = useAuthStore();
-  const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
 
   useEffect(() => {
     if (isAuthenticated && token && token !== 'dev-token') {
@@ -36,6 +38,35 @@ export default function RootNavigator(): React.JSX.Element {
       disconnectSocket();
       useSavedStore.getState().clear();
     }
+  }, [isAuthenticated, token]);
+
+  // Global socket listener: increment unread count for messages arriving outside the active chat
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+
+    const socket = getSocket();
+    if (!socket) return;
+
+    function handleGlobalNewMessage(message: Message) {
+      const { activeConversationId, incrementUnread, updateConversationLastMessage } =
+        useChatStore.getState();
+
+      // Skip if the user is currently viewing this conversation
+      if (message.conversationId === activeConversationId) return;
+
+      // Skip messages sent by the current user (own messages echoed back)
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (message.senderId === currentUserId) return;
+
+      incrementUnread(message.conversationId);
+      updateConversationLastMessage(message.conversationId, message);
+    }
+
+    socket.on('new_message', handleGlobalNewMessage);
+
+    return () => {
+      socket.off('new_message', handleGlobalNewMessage);
+    };
   }, [isAuthenticated, token]);
 
   return (

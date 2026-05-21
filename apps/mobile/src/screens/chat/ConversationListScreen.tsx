@@ -75,6 +75,10 @@ function ConversationRow({
     ? (rawConv.listing.seller?.displayName ?? 'Seller')
     : conversation.buyer.displayName;
 
+  const participantAvatar = isBuyer
+    ? rawConv.listing.seller?.avatarUrl
+    : conversation.buyer.avatarUrl;
+
   const coverImage = conversation.listing.images.find(
     (img: { id: string; url: string; order: number }) => img.order === 0,
   );
@@ -90,20 +94,37 @@ function ConversationRow({
       accessibilityLabel={`Conversation about ${conversation.listing.title} with ${participantLabel}`}
       accessibilityHint="Opens the message thread"
     >
-      {coverImage ? (
-        <Image
-          source={{ uri: coverImage.url }}
-          style={styles.thumbnail}
-          contentFit="cover"
-          transition={200}
-          cachePolicy="memory-disk"
-          accessibilityLabel={`Thumbnail for ${conversation.listing.title}`}
-        />
-      ) : (
-        <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-          <Text style={styles.thumbnailPlaceholderText}>?</Text>
-        </View>
-      )}
+      <View style={styles.thumbnailContainer}>
+        {coverImage ? (
+          <Image
+            source={{ uri: coverImage.url }}
+            style={styles.thumbnail}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+            accessibilityLabel={`Thumbnail for ${conversation.listing.title}`}
+          />
+        ) : (
+          <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
+            <Text style={styles.thumbnailPlaceholderText}>?</Text>
+          </View>
+        )}
+        {participantAvatar ? (
+          <Image
+            source={{ uri: participantAvatar }}
+            style={styles.avatarOverlay}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            accessibilityLabel={`${participantLabel}'s avatar`}
+          />
+        ) : (
+          <View style={[styles.avatarOverlay, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarInitial}>
+              {participantLabel.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
@@ -267,11 +288,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.surface,
   },
+  thumbnailContainer: {
+    width: THUMBNAIL_SIZE,
+    height: THUMBNAIL_SIZE,
+    marginRight: spacing.md,
+  },
   thumbnail: {
     width: THUMBNAIL_SIZE,
     height: THUMBNAIL_SIZE,
     borderRadius: radius.md,
-    marginRight: spacing.md,
   },
   thumbnailPlaceholder: {
     backgroundColor: colors.border,
@@ -281,6 +306,27 @@ const styles = StyleSheet.create({
   thumbnailPlaceholderText: {
     ...typography.title,
     color: colors.textSecondary,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  avatarPlaceholder: {
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    color: colors.surface,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 13,
   },
   rowContent: {
     flex: 1,
@@ -323,7 +369,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   badge: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.error,
     borderRadius: radius.full,
     minWidth: 20,
     height: 20,

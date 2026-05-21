@@ -97,3 +97,53 @@ Use **presigned URLs** for both upload and download. The S3 bucket uses `BlockAl
 - **Positive**: S3 bucket is fully private — no risk of accidental public exposure; upload traffic goes directly from the mobile client to S3, reducing backend bandwidth and latency; presigned URLs work with any HTTP client without SDK dependencies on the mobile side.
 - **Negative**: GET URLs expire, so cached listing data may contain stale image URLs. Mitigation: use a 1-hour TTL for GET URLs and refresh on each API response. If global latency becomes an issue, CloudFront can be layered in front without changing the S3 bucket configuration (additive change).
 - **Neutral**: The backend needs `s3:PutObject` and `s3:GetObject` permissions on the bucket, which are granted via the CDK stack's `grantReadWrite` call on the ECS task role.
+
+---
+
+## ADR-005: Price Negotiation as Separate Offers Table with Chat Message Integration
+
+**Date**: 2026-05-04
+**Status**: Proposed
+**Deciders**: @systems-architect (awaiting human approval)
+
+### Context
+The product needs a "Make an Offer" feature where buyers propose prices on listings, and sellers can accept, reject, or counter-offer. The negotiation history should be visible within the existing chat thread. The key design question is whether offers should be stored as structured records in their own table or embedded as JSON within the existing `messages` table.
+
+The existing system has: conversations scoped to `(listing_id, buyer_id)`, messages with `content` text field, and Socket.io real-time delivery per conversation room. Multiple buyers may negotiate on the same listing simultaneously.
+
+### Options Considered
+1. **Separate `offers` table + OFFER-type messages in chat**: A dedicated `offers` table with proper columns for amount, status (state machine), sender, expiry, and parent-offer chain. Each offer action also inserts a message with `type = 'OFFER'` and a `metadata` JSON column into the conversation for chronological rendering. -- Pros: Database-level integrity for offer state machine; efficient queries for "all pending offers on listing X" and "expire all pending offers"; clean separation of concerns; audit trail with proper indexes. Cons: Two writes per offer action (offers table + messages table); slight denormalization of amount in both places; more schema complexity.
+2. **Offers embedded in messages only (JSON metadata)**: Store all offer data in the `messages.metadata` JSON column. No separate table. Offer state is tracked by looking at the sequence of OFFER messages in a conversation. -- Pros: Simpler schema (no new table); single write path; chat history IS the offer history. Cons: No database-level state machine (must scan messages to determine current offer status); "get all pending offers on listing X" requires scanning all messages across all conversations; no FK relationships; race conditions harder to prevent without a dedicated row to lock; JSON queries are slower than indexed columns.
+3. **Offers table only, no chat integration**: Offers as a separate system that does not appear in the chat thread. Users view offers in a dedicated "Offers" tab or section. -- Pros: Complete separation; no coupling between chat and negotiation. Cons: Poor UX -- users must check two places; loses conversational context; negotiation feels disconnected from the relationship-building chat.
+
+### Decision
+**Option 1: Separate `offers` table with OFFER-type chat messages.** The primary reasons are: (1) offers have a state machine (PENDING/ACCEPTED/REJECTED/COUNTERED/EXPIRED/WITHDRAWN) that requires database-level integrity and indexed queries; (2) the seller needs efficient access to "all pending offers on my listing" which is impossible to query efficiently from JSON in messages; (3) race conditions on offer acceptance (two buyers' offers accepted simultaneously) are prevented by row-level locking on the offers table; (4) the dual-write (offers table + message) cost is negligible compared to the querying and integrity benefits.
+
+### Consequences
+- **Positive**: Clean state machine with indexed status column; efficient seller dashboard queries; row-level locking prevents double-acceptance; offer history survives even if messages are cleared; chat thread shows full negotiation chronologically without extra queries.
+- **Negative**: Two writes per offer action (mitigated by wrapping in a transaction); `messages` table gains `type` and `metadata` columns which slightly increase row size for all messages; more Prisma schema complexity.
+- **Neutral**: Existing chat rendering code must be updated to handle the new `OFFER` message type, but this is a one-time change that does not affect TEXT message rendering.
+
+---
+
+## ADR-006: Similar Items via Rule-Based SQL Query (No Search Service)
+
+**Date**: 2026-05-04
+**Status**: Proposed
+**Deciders**: @systems-architect (awaiting human approval)
+
+### Context
+The listing detail screen needs a "Similar Items" section showing 4-6 related listings. Similarity is defined as: same category, nearby location (within configurable radius), and similar price (+/-30% by default). The system already has a Haversine-based discovery endpoint and indexes on `(latitude, longitude)`, `status`, and `category_id`.
+
+### Options Considered
+1. **Rule-based SQL query reusing existing Haversine pattern**: A single endpoint that queries PostgreSQL with category filter, price range filter, and bounding-box + Haversine distance calculation. Results cached in-memory with 5-minute TTL. Fallback strategy progressively relaxes filters if too few results. -- Pros: Zero new infrastructure; reuses proven query pattern; existing indexes sufficient; in-memory cache avoids repeated DB hits; predictable latency (<80ms cold, <5ms cached). Cons: No semantic similarity (items must be in same category); no personalization; cache is per-process (not shared across ECS tasks).
+2. **Elasticsearch/OpenSearch for similarity**: Index listings in a search service; use `more_like_this` query or vector similarity. -- Pros: Semantic similarity across categories; could incorporate user behavior signals; powerful relevance tuning. Cons: Adds a new infrastructure dependency ($50-100/month minimum for managed OpenSearch); requires sync pipeline from PostgreSQL; operational complexity for a feature showing 6 items; overkill for current scale.
+3. **Collaborative filtering ("users who viewed X also viewed Y")**: Track listing view events; compute co-occurrence matrix; recommend based on viewing patterns. -- Pros: Discovers non-obvious similarities; improves with usage data. Cons: Requires event tracking infrastructure not yet built; cold-start problem (no data for new listings); needs batch processing pipeline; months of development for uncertain payoff at current user count.
+
+### Decision
+**Option 1: Rule-based SQL query.** The primary reasons are: (1) the feature's success criteria are modest (show 4-6 relevant alternatives); (2) the existing Haversine query pattern and indexes handle this with zero infrastructure addition; (3) category + proximity + price range covers 90% of what users mean by "similar" in a local marketplace context; (4) complexity can be added later (Elasticsearch, collaborative filtering) as a non-breaking enhancement once the product has enough users to justify the investment.
+
+### Consequences
+- **Positive**: Zero infrastructure cost; ships in days not weeks; predictable query performance; no new operational burden; fallback strategy ensures the section is populated in most cases.
+- **Negative**: Cannot find cross-category similarities (an iPhone case is not "similar" to an iPhone); no personalization; in-memory cache does not share across multiple ECS tasks (acceptable at current single-task scale).
+- **Neutral**: The endpoint contract (`GET /api/v1/listings/:id/similar`) is stable regardless of the underlying implementation. Swapping to Elasticsearch later requires only a service-layer change, not an API change.

@@ -9,6 +9,7 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.singlegrey.marketplace",
@@ -27,11 +28,9 @@
       "adaptiveIcon": {
         "backgroundColor": "#F8F9FA"
       },
-      "package": "com.marketplace.app",
-      "usesCleartextTraffic": true
+      "package": "com.marketplace.app"
     },
     "plugins": [
-      "./plugins/fix-podfile.js",
       "expo-notifications",
       [
         "expo-location",
@@ -46,7 +45,8 @@
           "cameraPermission": "Allow Marketplace to use your camera to take listing photos."
         }
       ],
-      "./plugins/allow-http.js"
+      "./plugins/allow-http.js",
+      "expo-web-browser"
     ],
     "extra": {
       "auth0Domain": "",

@@ -7,7 +7,8 @@ const monorepoRoot = path.resolve(projectRoot, '../..');
 const config = getDefaultConfig(projectRoot);
 
 // Watch the monorepo root so Metro can resolve @marketplace/shared
-config.watchFolders = [monorepoRoot];
+// Merge with defaults instead of overriding
+config.watchFolders = [...(config.watchFolders || []), monorepoRoot];
 
 // Resolve modules from the mobile app first, then the monorepo root
 config.resolver.nodeModulesPaths = [
