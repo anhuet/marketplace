@@ -18,6 +18,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -229,8 +230,11 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   }, []);
 
   useEffect(() => {
+    // In edit mode, GPS comes from the existing listing — never override it
+    // with the device's current location.
+    if (isEditMode) return;
     captureLocation();
-  }, [captureLocation]);
+  }, [captureLocation, isEditMode]);
 
   // ── Handle returned location from LocationPicker ────────────────────────
 
@@ -342,6 +346,24 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     return true;
   };
 
+  // Re-encode every picked asset to JPEG. iPhone gallery returns HEIC by default,
+  // which sharp on the backend (built without libheif) cannot decode — so we
+  // normalise to JPEG client-side before upload.
+  const toJpeg = async (
+    asset: ImagePicker.ImagePickerAsset,
+    indexInBatch: number,
+  ): Promise<SelectedPhoto> => {
+    const manipulated = await ImageManipulator.manipulateAsync(asset.uri, [], {
+      compress: 0.8,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+    return {
+      uri: manipulated.uri,
+      type: 'image/jpeg',
+      fileName: `photo-${Date.now()}-${indexInBatch}.jpg`,
+    };
+  };
+
   const pickFromGallery = async () => {
     if (photos.length >= MAX_PHOTOS) {
       Alert.alert('Photo Limit', `You can only add up to ${MAX_PHOTOS} photos.`);
@@ -358,13 +380,13 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const newPhotos: SelectedPhoto[] = result.assets.map((asset) => ({
-        uri: asset.uri,
-        type: asset.mimeType ?? 'image/jpeg',
-        fileName: asset.fileName ?? `photo-${Date.now()}.jpg`,
-      }));
-      setPhotos((prev) => [...prev, ...newPhotos].slice(0, MAX_PHOTOS));
-      setPhotosError(null);
+      try {
+        const newPhotos = await Promise.all(result.assets.map((a, i) => toJpeg(a, i)));
+        setPhotos((prev) => [...prev, ...newPhotos].slice(0, MAX_PHOTOS));
+        setPhotosError(null);
+      } catch {
+        setPhotosError('Could not process one of the selected photos. Please try again.');
+      }
     }
   };
 
@@ -382,18 +404,13 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      setPhotos((prev) =>
-        [
-          ...prev,
-          {
-            uri: asset.uri,
-            type: asset.mimeType ?? 'image/jpeg',
-            fileName: asset.fileName ?? `photo-${Date.now()}.jpg`,
-          },
-        ].slice(0, MAX_PHOTOS),
-      );
-      setPhotosError(null);
+      try {
+        const newPhoto = await toJpeg(result.assets[0], 0);
+        setPhotos((prev) => [...prev, newPhoto].slice(0, MAX_PHOTOS));
+        setPhotosError(null);
+      } catch {
+        setPhotosError('Could not process the captured photo. Please try again.');
+      }
     }
   };
 
@@ -426,15 +443,15 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
     try {
       if (isEditMode && listingId) {
-        // Edit mode: PUT with FormData
+        // Edit mode: PUT with FormData.
+        // GPS coordinates are intentionally NOT sent — the listing's location
+        // is fixed at the moment of creation and cannot be edited.
         const formData = new FormData();
         formData.append('title', values.title);
         formData.append('description', values.description);
         formData.append('price', values.price);
         formData.append('condition', values.condition);
         formData.append('categoryId', values.categoryId);
-        formData.append('latitude', String(gps.latitude));
-        formData.append('longitude', String(gps.longitude));
 
         // Only attach local (newly selected) photos — remote URLs are skipped
         photos.forEach((photo) => {
@@ -756,40 +773,72 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
               <Text style={styles.locationLoadingText}>Getting your location...</Text>
             </View>
           ) : gps ? (
-            <TouchableOpacity
-              style={styles.mapPreviewContainer}
-              onPress={() => navigation.navigate('LocationPicker', { latitude: gps.latitude, longitude: gps.longitude })}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Change location on map"
-            >
-              <MapView
-                style={styles.mapPreview}
-                region={{
-                  latitude: gps.latitude,
-                  longitude: gps.longitude,
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                rotateEnabled={false}
-                pitchEnabled={false}
-                pointerEvents="none"
+            isEditMode ? (
+              <View
+                style={styles.mapPreviewContainer}
+                accessibilityRole="image"
+                accessibilityLabel="Listing location (read-only)"
               >
-                <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
-              </MapView>
-              <View style={styles.mapOverlayRow}>
-                <View style={styles.mapAddressContainer}>
-                  <Text style={styles.mapAddressText} numberOfLines={1}>
-                    {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
-                  </Text>
-                </View>
-                <View style={styles.changeLocationBadge}>
-                  <Text style={styles.changeLocationText}>Change</Text>
+                <MapView
+                  style={styles.mapPreview}
+                  region={{
+                    latitude: gps.latitude,
+                    longitude: gps.longitude,
+                    latitudeDelta: 0.005,
+                    longitudeDelta: 0.005,
+                  }}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                  pointerEvents="none"
+                >
+                  <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
+                </MapView>
+                <View style={styles.mapOverlayRow}>
+                  <View style={styles.mapAddressContainer}>
+                    <Text style={styles.mapAddressText} numberOfLines={1}>
+                      {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.mapPreviewContainer}
+                onPress={() => navigation.navigate('LocationPicker', { latitude: gps.latitude, longitude: gps.longitude })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Change location on map"
+              >
+                <MapView
+                  style={styles.mapPreview}
+                  region={{
+                    latitude: gps.latitude,
+                    longitude: gps.longitude,
+                    latitudeDelta: 0.005,
+                    longitudeDelta: 0.005,
+                  }}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                  pointerEvents="none"
+                >
+                  <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
+                </MapView>
+                <View style={styles.mapOverlayRow}>
+                  <View style={styles.mapAddressContainer}>
+                    <Text style={styles.mapAddressText} numberOfLines={1}>
+                      {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                    </Text>
+                  </View>
+                  <View style={styles.changeLocationBadge}>
+                    <Text style={styles.changeLocationText}>Change</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )
           ) : (
             <View style={styles.locationRow}>
               <View style={styles.locationInfo}>

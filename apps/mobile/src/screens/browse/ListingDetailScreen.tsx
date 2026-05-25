@@ -132,14 +132,16 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
         viewabilityConfig={viewabilityConfig}
         style={styles.carouselList}
         renderItem={({ item }) => (
-          <Image
-            source={{ uri: item.url }}
-            style={styles.carouselImage}
-            contentFit="cover"
-            transition={200}
-            cachePolicy="memory-disk"
-            accessibilityLabel="Listing photo"
-          />
+          <View style={styles.carouselSlide}>
+            <Image
+              source={{ uri: item.url }}
+              style={styles.carouselImage}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+              accessibilityLabel="Listing photo"
+            />
+          </View>
         )}
         getItemLayout={(_data, index) => ({
           length: SCREEN_WIDTH,
@@ -595,6 +597,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   carouselList: {
+    width: SCREEN_WIDTH,
+    height: CAROUSEL_HEIGHT,
+  },
+  carouselSlide: {
     width: SCREEN_WIDTH,
     height: CAROUSEL_HEIGHT,
   },

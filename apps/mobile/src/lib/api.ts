@@ -5,7 +5,7 @@ export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://54.175.34.74/
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -64,9 +64,15 @@ export const api = {
   getListing: (id: string) => apiClient.get(`/listings/${id}`),
   getSellerListings: (sellerId: string) => apiClient.get(`/listings/seller/${sellerId}`),
   createListing: (data: FormData) =>
-    apiClient.post('/listings', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    apiClient.post('/listings', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }),
   updateListing: (id: string, data: FormData) =>
-    apiClient.put(`/listings/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    apiClient.put(`/listings/${id}`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }),
   deleteListing: (id: string) => apiClient.delete(`/listings/${id}`),
   markListingSold: (id: string, buyerId?: string) =>
     apiClient.patch(`/listings/${id}/status`, { status: 'SOLD', ...(buyerId && { buyerId }) }),

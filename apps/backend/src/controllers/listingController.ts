@@ -120,8 +120,12 @@ export async function updateListingHandler(
       ? await resolveCategoryId(parsed.data.categoryId)
       : undefined;
 
+    // GPS coordinates are immutable after a listing is created — strip them
+    // even if a client sends them.
+    const { latitude: _lat, longitude: _lng, ...editableFields } = parsed.data;
+
     const listing = await updateListing(req.params.id, req.dbUser!.id, {
-      ...parsed.data,
+      ...editableFields,
       ...(categoryId !== undefined && { categoryId }),
       ...(imageUrls !== undefined && { imageUrls }),
     }).catch(handleOwnershipError);
