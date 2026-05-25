@@ -175,7 +175,7 @@ const CONDITION_LABELS: Record<string, string> = {
 function formatPrice(price: string): string {
   const num = parseFloat(price);
   if (isNaN(num)) return price;
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+  return new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(num);
 }
 
 function formatDate(iso: string): string {

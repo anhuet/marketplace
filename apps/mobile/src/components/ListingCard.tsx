@@ -18,9 +18,9 @@ interface ListingCardProps {
 function formatPrice(price: string): string {
   const numericPrice = parseFloat(price);
   if (isNaN(numericPrice)) return price;
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IE', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'EUR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(numericPrice);

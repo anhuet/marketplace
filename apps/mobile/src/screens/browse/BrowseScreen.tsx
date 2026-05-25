@@ -72,8 +72,8 @@ const GRID_ITEM_HEIGHT = GRID_ITEM_WIDTH * 1.25;
 function formatPrice(price: string): string {
   const n = parseFloat(price);
   if (isNaN(n)) return price;
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-  return `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(0)}`;
+  if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
+  return `€${n % 1 === 0 ? n.toFixed(0) : n.toFixed(0)}`;
 }
 
 function formatDistance(km: number | undefined): string {
@@ -215,7 +215,7 @@ function FeedItem({
         <Text style={feedStyles.title} numberOfLines={2}>{listing.title}</Text>
         <View style={feedStyles.meta}>
           <Text style={feedStyles.price}>
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(parseFloat(listing.price))}
+            {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(parseFloat(listing.price))}
           </Text>
           {listing.distanceKm !== undefined && (
             <Text style={feedStyles.distance}>{formatDistance(listing.distanceKm)}</Text>

@@ -37,9 +37,9 @@ interface SavedListingsResponse {
 function formatPrice(price: string): string {
   const n = parseFloat(price);
   if (isNaN(n)) return price;
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IE', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'EUR',
     minimumFractionDigits: 0,
   }).format(n);
 }
