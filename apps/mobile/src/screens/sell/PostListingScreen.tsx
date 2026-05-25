@@ -888,7 +888,10 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   thumbnailWrapper: {
-    position: 'relative',
+    // Padding gives the absolutely-positioned X button room to render above
+    // and to the right of the image without being clipped by the FlatList.
+    paddingTop: 8,
+    paddingRight: 8,
   },
   thumbnail: {
     width: 88,
@@ -898,8 +901,8 @@ const styles = StyleSheet.create({
   },
   removePhotoButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: 0,
+    right: 0,
     width: 24,
     height: 24,
     borderRadius: radius.full,
