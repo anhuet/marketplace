@@ -188,7 +188,10 @@ function formatDate(iso: string): string {
 }
 
 function formatDistance(km: number): string {
-  if (km < 1) return `${Math.round(km * 1000)} m away`;
+  if (km < 1) {
+    const metres = Math.round(km * 1000);
+    return `${metres < 100 ? 100 : metres} m away`;
+  }
   return `${km.toFixed(1)} km away`;
 }
 

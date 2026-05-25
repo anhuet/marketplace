@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -55,14 +49,20 @@ interface CategoriesResponse {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_LIMIT = 20;
 const SEARCH_DEBOUNCE_MS = 400;
-const DEFAULT_RADIUS_KM = 10;
-const RADIUS_OPTIONS = [5, 10, 25, 50, 100];
+const DEFAULT_RADIUS_KM = 0.5;
+const RADIUS_OPTIONS = [0.1, 0.3, 0.5, 1, 2];
+
+function formatRadius(km: number): string {
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km} km`;
+}
 
 // Grid: 3 columns with gaps
 const GRID_COLUMNS = 3;
 const GRID_GAP = spacing.xs;
 const GRID_PADDING = spacing.sm;
-const GRID_ITEM_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+const GRID_ITEM_WIDTH =
+  (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 const GRID_ITEM_HEIGHT = GRID_ITEM_WIDTH * 1.25;
 
 // -----------------------------------------------------------------
@@ -78,7 +78,10 @@ function formatPrice(price: string): string {
 
 function formatDistance(km: number | undefined): string {
   if (km === undefined || km === null) return '';
-  if (km < 1) return `${Math.round(km * 1000)}m`;
+  if (km < 1) {
+    const metres = Math.round(km * 1000);
+    return `${metres < 100 ? 100 : metres}m`;
+  }
   return `${km.toFixed(1)}km`;
 }
 
@@ -94,8 +97,7 @@ function GridItem({
   onPress: (listing: ListingWithDetails) => void;
 }) {
   const coverUrl =
-    (listing as { coverImageUrl?: string }).coverImageUrl ??
-    listing.images?.[0]?.url;
+    (listing as { coverImageUrl?: string }).coverImageUrl ?? listing.images?.[0]?.url;
 
   return (
     <TouchableOpacity
@@ -106,7 +108,13 @@ function GridItem({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={gridStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+        <Image
+          source={{ uri: coverUrl }}
+          style={gridStyles.image}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+        />
       ) : (
         <View style={[gridStyles.image, gridStyles.imageFallback]}>
           <Text style={gridStyles.imageFallbackText}>No photo</Text>
@@ -193,8 +201,7 @@ function FeedItem({
   onPress: (listing: ListingWithDetails) => void;
 }) {
   const coverUrl =
-    (listing as { coverImageUrl?: string }).coverImageUrl ??
-    listing.images?.[0]?.url;
+    (listing as { coverImageUrl?: string }).coverImageUrl ?? listing.images?.[0]?.url;
 
   return (
     <TouchableOpacity
@@ -205,25 +212,35 @@ function FeedItem({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={feedStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+        <Image
+          source={{ uri: coverUrl }}
+          style={feedStyles.image}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+        />
       ) : (
         <View style={[feedStyles.image, feedStyles.imageFallback]}>
           <Text style={feedStyles.imageFallbackText}>No photo</Text>
         </View>
       )}
       <View style={feedStyles.info}>
-        <Text style={feedStyles.title} numberOfLines={2}>{listing.title}</Text>
+        <Text style={feedStyles.title} numberOfLines={2}>
+          {listing.title}
+        </Text>
         <View style={feedStyles.meta}>
           <Text style={feedStyles.price}>
-            {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(parseFloat(listing.price))}
+            {new Intl.NumberFormat('en-IE', {
+              style: 'currency',
+              currency: 'EUR',
+              minimumFractionDigits: 0,
+            }).format(parseFloat(listing.price))}
           </Text>
           {listing.distanceKm !== undefined && (
             <Text style={feedStyles.distance}>{formatDistance(listing.distanceKm)}</Text>
           )}
         </View>
-        {listing.category && (
-          <Text style={feedStyles.category}>{listing.category.name}</Text>
-        )}
+        {listing.category && <Text style={feedStyles.category}>{listing.category.name}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -299,8 +316,7 @@ function NearbyCard({
   onPress: (listing: ListingWithDetails) => void;
 }) {
   const coverUrl =
-    (listing as { coverImageUrl?: string }).coverImageUrl ??
-    listing.images?.[0]?.url;
+    (listing as { coverImageUrl?: string }).coverImageUrl ?? listing.images?.[0]?.url;
 
   return (
     <TouchableOpacity
@@ -311,12 +327,20 @@ function NearbyCard({
       accessibilityLabel={listing.title}
     >
       {coverUrl ? (
-        <Image source={{ uri: coverUrl }} style={nearbyStyles.image} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+        <Image
+          source={{ uri: coverUrl }}
+          style={nearbyStyles.image}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+        />
       ) : (
         <View style={[nearbyStyles.image, nearbyStyles.imageFallback]} />
       )}
       <View style={nearbyStyles.overlay}>
-        <Text style={nearbyStyles.name} numberOfLines={2}>{listing.title}</Text>
+        <Text style={nearbyStyles.name} numberOfLines={2}>
+          {listing.title}
+        </Text>
         {listing.distanceKm !== undefined && (
           <Text style={nearbyStyles.distance}>{formatDistance(listing.distanceKm)}</Text>
         )}
@@ -400,7 +424,10 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   // Location
   // -----------------------------------------------------------------
 
-  const requestLocation = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
+  const requestLocation = useCallback(async (): Promise<{
+    latitude: number;
+    longitude: number;
+  } | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -408,7 +435,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
         return null;
       }
       setLocationPermissionDenied(false);
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       setLastKnownLocation(coords);
       return coords;
@@ -421,66 +450,96 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   // Fetch listings
   // -----------------------------------------------------------------
 
-  const fetchListings = useCallback(async ({
-    coords,
-    pageNum,
-    query,
-    catId,
-    km,
-    append,
-  }: {
-    coords: { latitude: number; longitude: number };
-    pageNum: number;
-    query: string;
-    catId: string | undefined;
-    km: number;
-    append: boolean;
-  }) => {
-    try {
-      const response = await api.getNearbyListings({
-        lat: coords.latitude,
-        lng: coords.longitude,
-        radiusKm: km,
-        categoryId: catId,
-        q: query || undefined,
-        page: pageNum,
-        limit: PAGE_LIMIT,
-      });
-      const data = response.data as NearbyListingsResponse;
-      setListings((prev) => (append ? [...prev, ...data.listings] : data.listings));
-      setHasMore(data.hasMore);
-      setPage(pageNum);
-      setFetchError(null);
-    } catch {
-      setFetchError('Could not load listings. Please try again.');
-    }
-  }, []);
+  const fetchListings = useCallback(
+    async ({
+      coords,
+      pageNum,
+      query,
+      catId,
+      km,
+      append,
+    }: {
+      coords: { latitude: number; longitude: number };
+      pageNum: number;
+      query: string;
+      catId: string | undefined;
+      km: number;
+      append: boolean;
+    }) => {
+      try {
+        const response = await api.getNearbyListings({
+          lat: coords.latitude,
+          lng: coords.longitude,
+          radiusKm: km,
+          categoryId: catId,
+          q: query || undefined,
+          page: pageNum,
+          limit: PAGE_LIMIT,
+        });
+        const data = response.data as NearbyListingsResponse;
+        setListings((prev) => (append ? [...prev, ...data.listings] : data.listings));
+        setHasMore(data.hasMore);
+        setPage(pageNum);
+        setFetchError(null);
+      } catch {
+        setFetchError('Could not load listings. Please try again.');
+      }
+    },
+    [],
+  );
 
-  const loadInitial = useCallback(async (refresh = false) => {
-    let coords = lastKnownLocation;
-    if (!coords) {
-      const acquired = await requestLocation();
-      if (!acquired) return;
-      coords = acquired;
-    }
-    if (refresh) {
-      const fresh = await requestLocation();
-      if (fresh) coords = fresh;
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    await fetchListings({ coords, pageNum: 1, query: appliedQuery, catId: selectedCategoryId, km: radiusKm, append: false });
-    if (refresh) setIsRefreshing(false);
-    else setIsLoading(false);
-  }, [lastKnownLocation, requestLocation, fetchListings, appliedQuery, selectedCategoryId, radiusKm]);
+  const loadInitial = useCallback(
+    async (refresh = false) => {
+      let coords = lastKnownLocation;
+      if (!coords) {
+        const acquired = await requestLocation();
+        if (!acquired) return;
+        coords = acquired;
+      }
+      if (refresh) {
+        const fresh = await requestLocation();
+        if (fresh) coords = fresh;
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      await fetchListings({
+        coords,
+        pageNum: 1,
+        query: appliedQuery,
+        catId: selectedCategoryId,
+        km: radiusKm,
+        append: false,
+      });
+      if (refresh) setIsRefreshing(false);
+      else setIsLoading(false);
+    },
+    [lastKnownLocation, requestLocation, fetchListings, appliedQuery, selectedCategoryId, radiusKm],
+  );
 
   const loadNextPage = useCallback(async () => {
     if (!hasMore || isFetchingMore || isLoading || !lastKnownLocation) return;
     setIsFetchingMore(true);
-    await fetchListings({ coords: lastKnownLocation, pageNum: page + 1, query: appliedQuery, catId: selectedCategoryId, km: radiusKm, append: true });
+    await fetchListings({
+      coords: lastKnownLocation,
+      pageNum: page + 1,
+      query: appliedQuery,
+      catId: selectedCategoryId,
+      km: radiusKm,
+      append: true,
+    });
     setIsFetchingMore(false);
-  }, [hasMore, isFetchingMore, isLoading, lastKnownLocation, fetchListings, page, appliedQuery, selectedCategoryId, radiusKm]);
+  }, [
+    hasMore,
+    isFetchingMore,
+    isLoading,
+    lastKnownLocation,
+    fetchListings,
+    page,
+    appliedQuery,
+    selectedCategoryId,
+    radiusKm,
+  ]);
 
   // -----------------------------------------------------------------
   // Categories
@@ -515,8 +574,14 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   useEffect(() => {
     if (!lastKnownLocation) return;
     setIsLoading(true);
-    fetchListings({ coords: lastKnownLocation, pageNum: 1, query: appliedQuery, catId: selectedCategoryId, km: radiusKm, append: false })
-      .finally(() => setIsLoading(false));
+    fetchListings({
+      coords: lastKnownLocation,
+      pageNum: 1,
+      query: appliedQuery,
+      catId: selectedCategoryId,
+      km: radiusKm,
+      append: false,
+    }).finally(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedQuery, selectedCategoryId, radiusKm]);
 
@@ -528,7 +593,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
   }, []);
 
   // -----------------------------------------------------------------
@@ -556,9 +623,12 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   // Navigation
   // -----------------------------------------------------------------
 
-  const handleCardPress = useCallback((listing: ListingWithDetails) => {
-    navigation.navigate('ListingDetail', { listingId: listing.id });
-  }, [navigation]);
+  const handleCardPress = useCallback(
+    (listing: ListingWithDetails) => {
+      navigation.navigate('ListingDetail', { listingId: listing.id });
+    },
+    [navigation],
+  );
 
   // -----------------------------------------------------------------
   // Derived data
@@ -584,12 +654,19 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
         <View style={styles.permissionDenied}>
           <Text style={styles.permissionTitle}>Location access required</Text>
           <Text style={styles.permissionBody}>
-            Marketplace needs your location to show nearby listings. Please enable location access in your device settings.
+            Marketplace needs your location to show nearby listings. Please enable location access
+            in your device settings.
           </Text>
           <TouchableOpacity style={styles.settingsButton} onPress={() => Linking.openSettings()}>
             <Text style={styles.settingsButtonText}>Open Settings</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.retryButton} onPress={() => { setLocationPermissionDenied(false); loadInitial(false); }}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setLocationPermissionDenied(false);
+              loadInitial(false);
+            }}
+          >
             <Text style={styles.retryButtonText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -645,7 +722,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
             accessibilityLabel="Grid view"
             accessibilityState={{ selected: viewMode === 'grid' }}
           >
-            <Text style={[styles.toggleText, viewMode === 'grid' && styles.toggleTextActive]}>Grid</Text>
+            <Text style={[styles.toggleText, viewMode === 'grid' && styles.toggleTextActive]}>
+              Grid
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleButton, viewMode === 'feed' && styles.toggleButtonActive]}
@@ -654,16 +733,22 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
             accessibilityLabel="Feed view"
             accessibilityState={{ selected: viewMode === 'feed' }}
           >
-            <Text style={[styles.toggleText, viewMode === 'feed' && styles.toggleTextActive]}>Feed</Text>
+            <Text style={[styles.toggleText, viewMode === 'feed' && styles.toggleTextActive]}>
+              Feed
+            </Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={[styles.filterChip, activeFilterCount > 0 && styles.filterChipActive]}
           onPress={openFilterSheet}
           accessibilityRole="button"
-          accessibilityLabel={activeFilterCount > 0 ? `${activeFilterCount} filters active` : 'Open filters'}
+          accessibilityLabel={
+            activeFilterCount > 0 ? `${activeFilterCount} filters active` : 'Open filters'
+          }
         >
-          <Text style={[styles.filterChipText, activeFilterCount > 0 && styles.filterChipTextActive]}>
+          <Text
+            style={[styles.filterChipText, activeFilterCount > 0 && styles.filterChipTextActive]}
+          >
             ⊞ {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filter'}
           </Text>
         </TouchableOpacity>
@@ -701,13 +786,17 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No listings found</Text>
       <Text style={styles.emptyBody}>
-        There are no active listings within {radiusKm} km of your location.
+        There are no active listings within {formatRadius(radiusKm)} of your location.
       </Text>
-      {radiusKm < 100 && (
-        <TouchableOpacity style={styles.emptyAction} onPress={() => setRadiusKm(Math.min(radiusKm * 2, 100))}>
-          <Text style={styles.emptyActionText}>Increase radius to {Math.min(radiusKm * 2, 100)} km</Text>
-        </TouchableOpacity>
-      )}
+      {(() => {
+        const next = RADIUS_OPTIONS.find((km) => km > radiusKm);
+        if (!next) return null;
+        return (
+          <TouchableOpacity style={styles.emptyAction} onPress={() => setRadiusKm(next)}>
+            <Text style={styles.emptyActionText}>Increase radius to {formatRadius(next)}</Text>
+          </TouchableOpacity>
+        );
+      })()}
     </View>
   );
 
@@ -716,10 +805,14 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Menu">
+          <TouchableOpacity
+            style={styles.headerIcon}
+            accessibilityRole="button"
+            accessibilityLabel="Menu"
+          >
             <Ionicons name="menu" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Atelier</Text>
+          <Text style={styles.headerTitle}>Nearby Treasures</Text>
           <TouchableOpacity
             style={styles.headerIcon}
             accessibilityRole="button"
@@ -794,7 +887,12 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       )}
 
       {/* ── Filter modal ── */}
-      <Modal visible={filterSheetVisible} transparent animationType="slide" onRequestClose={() => setFilterSheetVisible(false)}>
+      <Modal
+        visible={filterSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterSheetVisible(false)}
+      >
         <Pressable style={styles.modalBackdrop} onPress={() => setFilterSheetVisible(false)} />
         <View style={[styles.filterSheet, { paddingBottom: insets.bottom + spacing.base }]}>
           <View style={styles.sheetHandle} />
@@ -810,7 +908,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
                 accessibilityRole="radio"
                 accessibilityState={{ checked: pendingRadiusKm === km }}
               >
-                <Text style={[styles.chipText, pendingRadiusKm === km && styles.chipTextSelected]}>{km} km</Text>
+                <Text style={[styles.chipText, pendingRadiusKm === km && styles.chipTextSelected]}>
+                  {formatRadius(km)}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -823,7 +923,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
               accessibilityRole="radio"
               accessibilityState={{ checked: !pendingCategoryId }}
             >
-              <Text style={[styles.chipText, !pendingCategoryId && styles.chipTextSelected]}>All</Text>
+              <Text style={[styles.chipText, !pendingCategoryId && styles.chipTextSelected]}>
+                All
+              </Text>
             </TouchableOpacity>
             {categories.map((cat) => (
               <TouchableOpacity
@@ -833,7 +935,11 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
                 accessibilityRole="radio"
                 accessibilityState={{ checked: pendingCategoryId === cat.id }}
               >
-                <Text style={[styles.chipText, pendingCategoryId === cat.id && styles.chipTextSelected]}>{cat.name}</Text>
+                <Text
+                  style={[styles.chipText, pendingCategoryId === cat.id && styles.chipTextSelected]}
+                >
+                  {cat.name}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>

@@ -29,7 +29,8 @@ function formatPrice(price: string): string {
 function formatDistance(distanceKm: number | undefined): string {
   if (distanceKm === undefined || distanceKm === null) return '';
   if (distanceKm < 1) {
-    return `${Math.round(distanceKm * 1000)} m away`;
+    const metres = Math.round(distanceKm * 1000);
+    return `${metres < 100 ? 100 : metres} m away`;
   }
   return `${distanceKm.toFixed(1)} km away`;
 }
