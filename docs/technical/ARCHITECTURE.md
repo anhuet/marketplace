@@ -220,6 +220,12 @@ ChatThreadScreen is reachable from both the Browse stack (via ListingDetail → 
 
 Named API groups (`authApi`, `invitesApi`, `listingsApi`, `conversationsApi`, `reviewsApi`, `pushApi`) are exported alongside the raw client for typed call sites in screens.
 
+### Notable Components
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| `InviteCodeInput` | `src/components/InviteCodeInput.tsx` | Renders a fixed `MKT-` prefix label alongside an editable region that auto-uppercases, strips non-alphanumeric chars, and auto-inserts a dash after the 4th character. Internal state holds the 9-char body (`XXXX-XXXX`); the `onChangeValue` callback always returns the full `MKT-XXXX-XXXX` wire format ready for the API. |
+
 ### Real-Time (Socket.io)
 
 `src/lib/socket.ts` manages a singleton Socket.io connection:

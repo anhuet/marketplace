@@ -17,7 +17,7 @@ import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
 import { api, apiClient, BASE_URL } from '../../lib/api';
 import PrimaryButton from '../../components/PrimaryButton';
-import FormInput from '../../components/FormInput';
+import InviteCodeInput from '../../components/InviteCodeInput';
 import { colors, spacing, typography } from '../../theme/tokens';
 import { AuthStackScreenProps } from '../../navigation/types';
 import { User } from '@marketplace/shared';
@@ -66,13 +66,15 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
       let timer: ReturnType<typeof setTimeout>;
       return (code: string) => {
         clearTimeout(timer);
-        if (code.length < 4) {
+        // Only validate once the full MKT-XXXX-XXXX (12 chars) is entered
+        if (code.length < 12) {
           setInviteValid(null);
           return;
         }
         setInviteChecking(true);
         timer = setTimeout(async () => {
           try {
+            // code is always the full MKT-XXXX-XXXX string from InviteCodeInput
             const { data } = await api.validateInviteCode(code);
             setInviteValid(data.valid);
             if (!data.valid) {
@@ -98,10 +100,9 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
     [],
   );
 
-  const handleInviteCodeChange = (text: string) => {
-    const upper = text.toUpperCase();
-    setInviteCode(upper);
-    validateInvite(upper);
+  const handleInviteCodeChange = (fullCode: string) => {
+    setInviteCode(fullCode);
+    validateInvite(fullCode);
   };
 
   const handleContinue = async () => {
@@ -206,13 +207,9 @@ export default function SignupScreen({ navigation }: Props): React.JSX.Element {
           </Text>
 
           <View style={styles.form}>
-            <FormInput
-              label="Invite Code"
-              placeholder="MKT-XXXX-XXXX"
+            <InviteCodeInput
               value={inviteCode}
-              onChangeText={handleInviteCodeChange}
-              autoCapitalize="characters"
-              autoCorrect={false}
+              onChangeValue={handleInviteCodeChange}
               error={
                 inviteValid === false ? 'Invalid or already used invite code' : undefined
               }
