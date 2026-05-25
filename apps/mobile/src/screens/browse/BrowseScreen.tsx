@@ -7,7 +7,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -302,88 +301,6 @@ const feedStyles = StyleSheet.create({
 });
 
 // -----------------------------------------------------------------
-// Nearby card (horizontal scroll)
-// -----------------------------------------------------------------
-
-const NEARBY_CARD_WIDTH = 140;
-const NEARBY_CARD_HEIGHT = 100;
-
-function NearbyCard({
-  listing,
-  onPress,
-}: {
-  listing: ListingWithDetails;
-  onPress: (listing: ListingWithDetails) => void;
-}) {
-  const coverUrl =
-    (listing as { coverImageUrl?: string }).coverImageUrl ?? listing.images?.[0]?.url;
-
-  return (
-    <TouchableOpacity
-      style={nearbyStyles.card}
-      onPress={() => onPress(listing)}
-      activeOpacity={0.88}
-      accessibilityRole="button"
-      accessibilityLabel={listing.title}
-    >
-      {coverUrl ? (
-        <Image
-          source={{ uri: coverUrl }}
-          style={nearbyStyles.image}
-          contentFit="cover"
-          transition={200}
-          cachePolicy="memory-disk"
-        />
-      ) : (
-        <View style={[nearbyStyles.image, nearbyStyles.imageFallback]} />
-      )}
-      <View style={nearbyStyles.overlay}>
-        <Text style={nearbyStyles.name} numberOfLines={2}>
-          {listing.title}
-        </Text>
-        {listing.distanceKm !== undefined && (
-          <Text style={nearbyStyles.distance}>{formatDistance(listing.distanceKm)}</Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-const nearbyStyles = StyleSheet.create({
-  card: {
-    width: NEARBY_CARD_WIDTH,
-    height: NEARBY_CARD_HEIGHT,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.border,
-    marginRight: spacing.sm,
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  imageFallback: {
-    backgroundColor: colors.primary,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    padding: spacing.sm,
-    justifyContent: 'flex-end',
-  },
-  name: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    lineHeight: 14,
-  },
-  distance: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-  },
-});
-
-// -----------------------------------------------------------------
 // Main component
 // -----------------------------------------------------------------
 
@@ -641,9 +558,6 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
     return c;
   }, [selectedCategoryId, radiusKm]);
 
-  // Top 6 listings for nearby horizontal scroll
-  const nearbyListings = useMemo(() => listings.slice(0, 6), [listings]);
-
   // -----------------------------------------------------------------
   // Permission denied
   // -----------------------------------------------------------------
@@ -756,31 +670,11 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
     </View>
   );
 
-  const ListFooterComponent = (
-    <View>
-      {isFetchingMore ? (
-        <View style={styles.footer}>
-          <ActivityIndicator color={colors.primaryDark} />
-        </View>
-      ) : null}
-
-      {/* Nearby Treasures section */}
-      {nearbyListings.length > 0 && (
-        <View style={styles.nearbySection}>
-          <Text style={styles.nearbySectionTitle}>NEARBY TREASURES</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.nearbyScroll}
-          >
-            {nearbyListings.map((listing) => (
-              <NearbyCard key={listing.id} listing={listing} onPress={handleCardPress} />
-            ))}
-          </ScrollView>
-        </View>
-      )}
+  const ListFooterComponent = isFetchingMore ? (
+    <View style={styles.footer}>
+      <ActivityIndicator color={colors.primaryDark} />
     </View>
-  );
+  ) : null;
 
   const ListEmptyComponent = isLoading ? null : (
     <View style={styles.emptyState}>
@@ -1167,24 +1061,6 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.primaryDark,
     fontWeight: '600',
-  },
-
-  // Nearby section
-  nearbySection: {
-    marginTop: spacing.base,
-    paddingBottom: spacing.base,
-  },
-  nearbySectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 1.2,
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.sm,
-  },
-  nearbyScroll: {
-    paddingHorizontal: spacing.base,
-    paddingRight: spacing.base,
   },
 
   // Permission denied
