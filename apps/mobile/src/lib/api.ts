@@ -2,7 +2,6 @@ import axios, { AxiosInstance } from 'axios';
 import { useAuthStore } from '../store/authStore';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://54.175.34.74/api/v1';
-console.log('[API] BASE_URL =', BASE_URL);
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,

@@ -84,17 +84,15 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
 
     try {
       const result = await promptAsync();
-      console.log('[Login] promptAsync result.type =', result.type);
 
       if (result.type === 'cancel' || result.type === 'dismiss') {
         return;
       }
 
       if (result.type !== 'success') {
-        throw new Error(`Auth failed: result.type = ${result.type}`);
+        throw new Error('Authentication was not successful. Please try again.');
       }
 
-      console.log('[Login] exchanging code...');
       const tokenResponse = await AuthSession.exchangeCodeAsync(
         {
           clientId,
@@ -105,21 +103,16 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
         discovery,
       );
 
-      console.log('[Login] accessToken present =', !!tokenResponse.accessToken);
-
       if (!tokenResponse.accessToken) {
         throw new Error('No access token received from Auth0.');
       }
 
-      console.log('[Login] calling /auth/me...');
       const meResponse = await apiClient.get<{ user: User }>('/auth/me', {
         headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
       });
 
-      console.log('[Login] /auth/me status =', meResponse.status, 'user =', meResponse.data?.user?.email);
-
       if (!meResponse.data.user) {
-        throw new Error(`/auth/me returned no user. Response: ${JSON.stringify(meResponse.data)}`);
+        throw new Error('Login failed. Please try again.');
       }
 
       setAuth(meResponse.data.user, tokenResponse.accessToken);
