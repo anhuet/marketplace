@@ -332,11 +332,11 @@ HAVING
       + sin(radians($1)) * sin(radians(l.latitude))
     )
   ) <= $3
-ORDER BY distance_km ASC
+ORDER BY l.created_at DESC, l.id DESC
 LIMIT 50;
 ```
 
-Uses `idx_listings_lat_lng` and `idx_listings_status` for the pre-filter.
+Uses `idx_listings_lat_lng` and `idx_listings_status` for the pre-filter. Results are ordered newest first (`created_at DESC`); `distance_km` is still computed and returned for display but is not used for sorting. The `id DESC` tiebreaker makes pagination deterministic for listings created in the same millisecond.
 
 ### 2. Unread message count per conversation
 

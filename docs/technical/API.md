@@ -545,7 +545,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### GET /api/v1/discover/nearby
 
 **Auth required**: No
-**Description**: Returns active listings sorted by ascending distance from the caller's GPS coordinates. Supports optional radius, category, and keyword filters with offset-based pagination. Uses the Haversine formula in raw SQL with a bounding-box pre-filter on `(latitude, longitude)` for performance.
+**Description**: Returns active listings within the requested radius, ordered by newest first (created_at DESC). The `distanceKm` field is still returned for each listing for display. Supports optional radius, category, and keyword filters with offset-based pagination. Uses the Haversine formula in raw SQL with a bounding-box pre-filter on `(latitude, longitude)` for performance.
 
 **Query parameters**:
 

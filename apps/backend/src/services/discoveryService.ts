@@ -120,7 +120,7 @@ export async function getNearbyListings(input: NearbyListingsInput): Promise<{
       ${categoryFilter}
       ${keywordFilter}
       AND ${haversineExpr} <= ${radiusKm}
-    ORDER BY "distanceKm" ASC
+    ORDER BY l.created_at DESC, l.id DESC
     LIMIT ${limit} OFFSET ${offset}
   `;
 
