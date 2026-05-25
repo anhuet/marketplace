@@ -112,7 +112,10 @@ export async function updateListingHandler(
       throw new AppError(400, 'VALIDATION_ERROR', parsed.error.errors[0]?.message ?? 'Invalid input');
     }
 
-    const imageUrls = req.files ? await processUploadedImages(req) : undefined;
+    const imageUrls =
+      req.files && (req.files as Express.Multer.File[]).length > 0
+        ? await processUploadedImages(req)
+        : undefined;
     const categoryId = parsed.data.categoryId
       ? await resolveCategoryId(parsed.data.categoryId)
       : undefined;
