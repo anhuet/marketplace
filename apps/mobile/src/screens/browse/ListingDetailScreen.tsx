@@ -130,6 +130,7 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
         showsHorizontalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        style={styles.carouselList}
         renderItem={({ item }) => (
           <Image
             source={{ uri: item.url }}
@@ -589,6 +590,10 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: CAROUSEL_HEIGHT,
     backgroundColor: colors.border,
+  },
+  carouselList: {
+    width: SCREEN_WIDTH,
+    height: CAROUSEL_HEIGHT,
   },
   carouselImage: {
     width: SCREEN_WIDTH,

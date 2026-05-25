@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -292,6 +293,31 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       })
       .finally(() => setLoadingEdit(false));
   }, [isEditMode, listingId, setValue]);
+
+  // ── Reset form when navigating to Sell tab fresh (no listingId) ──────────
+  // The tab navigator keeps this screen alive. If the user previously opened
+  // edit mode (which sets route.params.listingId), then taps the "+" Sell tab
+  // directly, the screen refocuses with the old listingId still in params.
+  // Resetting on focus when there is no listingId gives a clean blank form.
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!listingId) {
+        reset({
+          title: '',
+          description: '',
+          price: '',
+          categoryId: '',
+          condition: undefined,
+        });
+        setPhotos([]);
+        setApiError(null);
+        setPhotosError(null);
+        setLocationAddress(null);
+        captureLocation();
+      }
+    }, [listingId, reset, captureLocation]),
+  );
 
   // ── Photo picker ─────────────────────────────────────────────────────────
 
