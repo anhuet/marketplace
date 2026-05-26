@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   prefixText: {
     ...typography.body,
     color: colors.textPrimary,
-    fontWeight: '600',
+    letterSpacing: 2,
   },
   input: {
     flex: 1,

@@ -6,6 +6,7 @@ import {
   createInviteCodeForUser,
 } from '../services/inviteCodeService';
 import { prisma } from '../lib/prisma';
+import { presignUserAvatar } from '../lib/userPresign';
 
 const validateInviteSchema = z.object({
   code: z.string().min(1),
@@ -105,9 +106,10 @@ export async function redeemInvite(req: Request, res: Response, next: NextFuncti
  * Returns the authenticated user's DB profile.
  * Auth required: Yes (requireAuth + attachUser)
  */
-export function getMe(req: Request, res: Response, next: NextFunction): void {
+export async function getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    res.json({ user: req.dbUser });
+    const user = await presignUserAvatar(req.dbUser!);
+    res.json({ user });
   } catch (err) {
     next(err);
   }

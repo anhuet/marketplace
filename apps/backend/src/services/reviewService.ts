@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { ListingStatus } from '@prisma/client';
+import { presignAvatarUrl } from '../lib/userPresign';
 
 export async function createReview(input: {
   listingId: string;
@@ -86,8 +87,18 @@ export async function getUserReviews(userId: string, page: number, limit: number
     prisma.review.count({ where: { revieweeId: userId } }),
   ]);
 
+  const presignedReviews = await Promise.all(
+    reviews.map(async (review) => ({
+      ...review,
+      reviewer: {
+        ...review.reviewer,
+        avatarUrl: await presignAvatarUrl(review.reviewer.avatarUrl),
+      },
+    })),
+  );
+
   return {
-    reviews,
+    reviews: presignedReviews,
     total,
     page,
     limit,

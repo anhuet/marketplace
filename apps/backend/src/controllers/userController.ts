@@ -9,6 +9,7 @@ import {
 import { uploadImageToS3WithKey } from '../lib/s3';
 import { prisma } from '../lib/prisma';
 import { randomUUID } from 'crypto';
+import { presignUserAvatar } from '../lib/userPresign';
 
 // ---------------------------------------------------------------------------
 // Shared display name validation
@@ -109,7 +110,7 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
 
     try {
       const updated = await updateUser(dbUser.id, updateData);
-      res.json({ user: updated });
+      res.json({ user: await presignUserAvatar(updated) });
     } catch (err) {
       if (err instanceof DisplayNameTakenError) {
         res.status(409).json({
@@ -215,7 +216,7 @@ export async function uploadMyAvatar(
       data: { avatarUrl },
     });
 
-    res.json({ user: updated });
+    res.json({ user: await presignUserAvatar(updated) });
   } catch (err) {
     next(err);
   }

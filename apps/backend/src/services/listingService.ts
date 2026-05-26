@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { Prisma, ListingStatus, Condition } from '@prisma/client';
 import { getPresignedUrl } from '../lib/s3';
+import { presignAvatarUrl, presignManyUserAvatars } from '../lib/userPresign';
 
 export interface CreateListingInput {
   title: string;
@@ -48,25 +49,38 @@ const listingInclude = {
 
 /**
  * Replaces each stored S3 object URL in a listing's images array with a
- * short-lived presigned GET URL (1-hour TTL). Returns a new object — does not
- * mutate the original. Safe to call in dev environments without S3: if the URL
- * does not match the CDN_URL prefix, the original URL is returned unchanged.
+ * short-lived presigned GET URL (1-hour TTL), and presigns seller/buyer
+ * avatarUrls if present. Returns a new object — does not mutate the original.
+ * Safe to call in dev environments without S3: if the URL does not match the
+ * CDN_URL prefix, the original URL is returned unchanged.
  */
 async function presignListingImages<
-  T extends { images: { id: string; url: string; order: number }[] },
+  T extends {
+    images: { id: string; url: string; order: number }[];
+    seller?: { avatarUrl?: string | null } | null;
+    buyer?: { avatarUrl?: string | null } | null;
+  },
 >(listing: T): Promise<T> {
-  const images = await Promise.all(
-    listing.images.map(async (img) => {
-      let url = img.url;
-      try {
-        url = await getPresignedUrl(img.url);
-      } catch {
-        // fall back to stored URL if presigning fails
-      }
-      return { ...img, url };
-    }),
-  );
-  return { ...listing, images };
+  const [images, seller, buyer] = await Promise.all([
+    Promise.all(
+      listing.images.map(async (img) => {
+        let url = img.url;
+        try {
+          url = await getPresignedUrl(img.url);
+        } catch {
+          // fall back to stored URL if presigning fails
+        }
+        return { ...img, url };
+      }),
+    ),
+    listing.seller
+      ? { ...listing.seller, avatarUrl: await presignAvatarUrl(listing.seller.avatarUrl) }
+      : listing.seller,
+    listing.buyer
+      ? { ...listing.buyer, avatarUrl: await presignAvatarUrl(listing.buyer.avatarUrl) }
+      : listing.buyer,
+  ]);
+  return { ...listing, images, seller, buyer };
 }
 
 export async function createListing(sellerId: string, input: CreateListingInput) {
@@ -224,7 +238,7 @@ export async function getListingBuyers(listingId: string, sellerId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  return conversations.map((c) => c.buyer);
+  return presignManyUserAvatars(conversations.map((c) => c.buyer));
 }
 
 export async function getSellerListings(sellerId: string) {

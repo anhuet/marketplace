@@ -1,10 +1,11 @@
 import { prisma } from '../lib/prisma';
 import { Message } from '@prisma/client';
 import { getPresignedUrl } from '../lib/s3';
+import { presignAvatarUrl } from '../lib/userPresign';
 
 export async function findOrCreateConversation(listingId: string, buyerId: string) {
   // Upsert: unique constraint on (listingId, buyerId)
-  return prisma.conversation.upsert({
+  const conv = await prisma.conversation.upsert({
     where: { listingId_buyerId: { listingId, buyerId } },
     create: { listingId, buyerId },
     update: {},
@@ -23,6 +24,9 @@ export async function findOrCreateConversation(listingId: string, buyerId: strin
       },
     },
   });
+
+  const buyerAvatarUrl = await presignAvatarUrl(conv.buyer.avatarUrl);
+  return { ...conv, buyer: { ...conv.buyer, avatarUrl: buyerAvatarUrl } };
 }
 
 export async function getUserConversations(userId: string) {
@@ -55,33 +59,42 @@ export async function getUserConversations(userId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  // Presign cover images + attach unread count per conversation
+  // Presign cover images, seller avatar, buyer avatar + attach unread count per conversation
   const withPresignedAndUnread = await Promise.all(
     conversations.map(async (conv) => {
-      const unreadCount = await prisma.message.count({
-        where: {
-          conversationId: conv.id,
-          senderId: { not: userId },
-          readAt: null,
-        },
-      });
-
-      // Presign the cover image URL
-      const images = await Promise.all(
-        conv.listing.images.map(async (img) => {
-          let url = img.url;
-          try {
-            url = await getPresignedUrl(img.url);
-          } catch {
-            // fall back to stored URL
-          }
-          return { ...img, url };
+      const [unreadCount, images, sellerAvatarUrl, buyerAvatarUrl] = await Promise.all([
+        prisma.message.count({
+          where: {
+            conversationId: conv.id,
+            senderId: { not: userId },
+            readAt: null,
+          },
         }),
-      );
+        Promise.all(
+          conv.listing.images.map(async (img) => {
+            let url = img.url;
+            try {
+              url = await getPresignedUrl(img.url);
+            } catch {
+              // fall back to stored URL
+            }
+            return { ...img, url };
+          }),
+        ),
+        presignAvatarUrl(conv.listing.seller?.avatarUrl),
+        presignAvatarUrl(conv.buyer.avatarUrl),
+      ]);
 
       return {
         ...conv,
-        listing: { ...conv.listing, images },
+        listing: {
+          ...conv.listing,
+          images,
+          seller: conv.listing.seller
+            ? { ...conv.listing.seller, avatarUrl: sellerAvatarUrl }
+            : conv.listing.seller,
+        },
+        buyer: { ...conv.buyer, avatarUrl: buyerAvatarUrl },
         unreadCount,
       };
     }),

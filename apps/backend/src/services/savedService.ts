@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { getPresignedUrl } from '../lib/s3';
+import { presignAvatarUrl } from '../lib/userPresign';
 
 export async function saveListing(userId: string, listingId: string) {
   // Verify listing exists and is not deleted
@@ -60,21 +61,31 @@ export async function getSavedListings(userId: string, page: number, limit: numb
   // Filter out deleted listings from results
   const filtered = items.filter((s) => s.listing.status !== 'DELETED');
 
-  // Presign image URLs so the mobile client can load them from the private S3 bucket
+  // Presign image URLs and seller avatar so the mobile client can load them from the private S3 bucket
   const withPresignedImages = await Promise.all(
     filtered.map(async (saved) => {
-      const images = await Promise.all(
-        saved.listing.images.map(async (img) => {
-          let url = img.url;
-          try {
-            url = await getPresignedUrl(img.url);
-          } catch {
-            // fall back to stored URL if presigning fails
-          }
-          return { ...img, url };
-        }),
-      );
-      return { ...saved, listing: { ...saved.listing, images } };
+      const [images, sellerAvatarUrl] = await Promise.all([
+        Promise.all(
+          saved.listing.images.map(async (img) => {
+            let url = img.url;
+            try {
+              url = await getPresignedUrl(img.url);
+            } catch {
+              // fall back to stored URL if presigning fails
+            }
+            return { ...img, url };
+          }),
+        ),
+        presignAvatarUrl(saved.listing.seller.avatarUrl),
+      ]);
+      return {
+        ...saved,
+        listing: {
+          ...saved.listing,
+          images,
+          seller: { ...saved.listing.seller, avatarUrl: sellerAvatarUrl },
+        },
+      };
     }),
   );
 
