@@ -36,11 +36,22 @@ import { CATEGORIES } from '@marketplace/shared';
 
 type Props = NativeStackScreenProps<SellStackParamList, 'PostListing'>;
 
-interface SelectedPhoto {
+/** A photo that already exists on the server and has a DB id. */
+interface RemotePhoto {
+  kind: 'remote';
+  id: string;
+  uri: string; // presigned URL — used for display only
+}
+
+/** A photo that was just picked from the device and has not been uploaded yet. */
+interface LocalPhoto {
+  kind: 'local';
   uri: string;
   type: string;
   fileName: string;
 }
+
+type EditablePhoto = RemotePhoto | LocalPhoto;
 
 interface GpsCoordinates {
   latitude: number;
@@ -158,8 +169,10 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     );
   }
 
-  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [photos, setPhotos] = useState<EditablePhoto[]>([]);
   const [photosError, setPhotosError] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
 
   const [gps, setGps] = useState<GpsCoordinates | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -284,11 +297,11 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         if (listing.latitude && listing.longitude) {
           setGps({ latitude: listing.latitude, longitude: listing.longitude });
         }
-        // Pre-fill existing image URIs as "remote" photos (no re-upload unless user changes)
-        const existingPhotos: SelectedPhoto[] = listing.images.map((img) => ({
+        // Map existing server images to RemotePhoto so we track their DB ids
+        const existingPhotos: RemotePhoto[] = listing.images.map((img) => ({
+          kind: 'remote',
+          id: img.id,
           uri: img.url,
-          type: 'image/jpeg',
-          fileName: `image-${img.id}.jpg`,
         }));
         setPhotos(existingPhotos);
       })
@@ -318,6 +331,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         setApiError(null);
         setPhotosError(null);
         setLocationAddress(null);
+        setUploadingPhoto(false);
+        setDeletingPhotoId(null);
         captureLocation();
       }
     }, [listingId, reset, captureLocation]),
@@ -352,16 +367,56 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   const toJpeg = async (
     asset: ImagePicker.ImagePickerAsset,
     indexInBatch: number,
-  ): Promise<SelectedPhoto> => {
+  ): Promise<LocalPhoto> => {
     const manipulated = await ImageManipulator.manipulateAsync(asset.uri, [], {
       compress: 0.8,
       format: ImageManipulator.SaveFormat.JPEG,
     });
     return {
+      kind: 'local',
       uri: manipulated.uri,
       type: 'image/jpeg',
       fileName: `photo-${Date.now()}-${indexInBatch}.jpg`,
     };
+  };
+
+  /**
+   * In edit mode, immediately upload the local photos to the server and
+   * convert them to RemotePhotos in state. In create mode, just append
+   * LocalPhotos — they will be uploaded on submit.
+   */
+  const appendPhotos = async (locals: LocalPhoto[]) => {
+    if (!isEditMode || !listingId) {
+      // Create mode: append as-is; upload happens on submit
+      setPhotos((prev) => [...prev, ...locals].slice(0, MAX_PHOTOS));
+      setPhotosError(null);
+      return;
+    }
+
+    // Edit mode: upload immediately
+    setUploadingPhoto(true);
+    setPhotosError(null);
+    try {
+      const formData = new FormData();
+      locals.forEach((p) => {
+        formData.append('images', {
+          uri: p.uri,
+          type: p.type,
+          name: p.fileName,
+        } as unknown as Blob);
+      });
+      const res = await api.addListingImages(listingId, formData);
+      const uploaded: RemotePhoto[] = res.data.images.map((img) => ({
+        kind: 'remote',
+        id: img.id,
+        uri: img.url,
+      }));
+      setPhotos((prev) => [...prev, ...uploaded].slice(0, MAX_PHOTOS));
+    } catch {
+      Alert.alert('Upload Failed', 'Could not upload the photo(s). Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const pickFromGallery = async () => {
@@ -381,9 +436,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
     if (!result.canceled && result.assets.length > 0) {
       try {
-        const newPhotos = await Promise.all(result.assets.map((a, i) => toJpeg(a, i)));
-        setPhotos((prev) => [...prev, ...newPhotos].slice(0, MAX_PHOTOS));
-        setPhotosError(null);
+        const locals = await Promise.all(result.assets.map((a, i) => toJpeg(a, i)));
+        await appendPhotos(locals);
       } catch {
         setPhotosError('Could not process one of the selected photos. Please try again.');
       }
@@ -405,9 +459,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
     if (!result.canceled && result.assets.length > 0) {
       try {
-        const newPhoto = await toJpeg(result.assets[0], 0);
-        setPhotos((prev) => [...prev, newPhoto].slice(0, MAX_PHOTOS));
-        setPhotosError(null);
+        const local = await toJpeg(result.assets[0], 0);
+        await appendPhotos([local]);
       } catch {
         setPhotosError('Could not process the captured photo. Please try again.');
       }
@@ -423,7 +476,40 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   };
 
   const removePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    const photo = photos[index];
+
+    if (photo.kind === 'remote') {
+      // Edit mode: confirm then call DELETE endpoint
+      Alert.alert('Remove Photo?', 'Are you sure you want to remove this photo?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingPhotoId(photo.id);
+            try {
+              await api.deleteListingImage(listingId!, photo.id);
+              setPhotos((prev) => prev.filter((_, i) => i !== index));
+            } catch (err: unknown) {
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 422) {
+                Alert.alert(
+                  'Cannot Remove',
+                  'Listing must have at least one image. Add another photo first.',
+                );
+              } else {
+                Alert.alert('Error', 'Could not remove the photo. Please try again.');
+              }
+            } finally {
+              setDeletingPhotoId(null);
+            }
+          },
+        },
+      ]);
+    } else {
+      // Create mode (local photo): just remove from state
+      setPhotos((prev) => prev.filter((_, i) => i !== index));
+    }
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -443,33 +529,22 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
     try {
       if (isEditMode && listingId) {
-        // Edit mode: PUT with FormData.
+        // Edit mode: PUT sends metadata only — images are already managed via
+        // POST /images (on add) and DELETE /images/:id (on remove).
         // GPS coordinates are intentionally NOT sent — the listing's location
-        // is fixed at the moment of creation and cannot be edited.
-        const formData = new FormData();
-        formData.append('title', values.title);
-        formData.append('description', values.description);
-        formData.append('price', values.price);
-        formData.append('condition', values.condition);
-        formData.append('categoryId', values.categoryId);
-
-        // Only attach local (newly selected) photos — remote URLs are skipped
-        photos.forEach((photo) => {
-          if (!photo.uri.startsWith('http')) {
-            formData.append('images', {
-              uri: photo.uri,
-              type: photo.type,
-              name: photo.fileName,
-            } as unknown as Blob);
-          }
+        // is fixed at creation and cannot be edited.
+        await api.updateListing(listingId, {
+          title: values.title,
+          description: values.description,
+          price: values.price,
+          condition: values.condition,
+          categoryId: values.categoryId,
         });
-
-        await api.updateListing(listingId, formData);
         Alert.alert('Success', 'Your listing has been updated.', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
-        // Create mode: POST with FormData
+        // Create mode: POST with FormData — all photos are LocalPhoto at this point
         const formData = new FormData();
         formData.append('title', values.title);
         formData.append('description', values.description);
@@ -480,11 +555,13 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         formData.append('longitude', String(gps.longitude));
 
         photos.forEach((photo) => {
-          formData.append('images', {
-            uri: photo.uri,
-            type: photo.type,
-            name: photo.fileName,
-          } as unknown as Blob);
+          if (photo.kind === 'local') {
+            formData.append('images', {
+              uri: photo.uri,
+              type: photo.type,
+              name: photo.fileName,
+            } as unknown as Blob);
+          }
         });
 
         await api.createListing(formData);
@@ -515,29 +592,38 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     item,
     index,
   }: {
-    item: SelectedPhoto;
+    item: EditablePhoto;
     index: number;
-  }) => (
-    <View style={styles.thumbnailWrapper}>
-      <Image
-        source={{ uri: item.uri }}
-        style={styles.thumbnail}
-        contentFit="cover"
-        transition={200}
-        cachePolicy="memory-disk"
-        accessibilityLabel={`Photo ${index + 1}`}
-      />
-      <TouchableOpacity
-        style={styles.removePhotoButton}
-        onPress={() => removePhoto(index)}
-        accessibilityRole="button"
-        accessibilityLabel={`Remove photo ${index + 1}`}
-        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-      >
-        <Text style={styles.removePhotoIcon}>✕</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  }) => {
+    const isDeleting = item.kind === 'remote' && deletingPhotoId === item.id;
+    return (
+      <View style={styles.thumbnailWrapper}>
+        <Image
+          source={{ uri: item.uri }}
+          style={styles.thumbnail}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+          accessibilityLabel={`Photo ${index + 1}`}
+        />
+        {isDeleting ? (
+          <View style={styles.thumbnailOverlay}>
+            <ActivityIndicator size="small" color={colors.surface} />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.removePhotoButton}
+            onPress={() => removePhoto(index)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove photo ${index + 1}`}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          >
+            <Text style={styles.removePhotoIcon}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   if (loadingEdit) {
     return (
@@ -595,7 +681,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
           <View style={styles.photoRow}>
             <FlatList
               data={photos}
-              keyExtractor={(_, i) => String(i)}
+              keyExtractor={(item) =>
+                item.kind === 'remote' ? `remote-${item.id}` : `local-${item.uri}`
+              }
               renderItem={renderPhotoThumbnail}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -603,14 +691,21 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
               ListFooterComponent={
                 photos.length < MAX_PHOTOS ? (
                   <TouchableOpacity
-                    style={styles.addPhotoButton}
-                    onPress={showPhotoOptions}
+                    style={[styles.addPhotoButton, uploadingPhoto && styles.addPhotoButtonDisabled]}
+                    onPress={uploadingPhoto ? undefined : showPhotoOptions}
                     accessibilityRole="button"
                     accessibilityLabel="Add photo"
                     accessibilityHint="Opens options to add a photo from your camera or library"
+                    accessibilityState={{ disabled: uploadingPhoto }}
                   >
-                    <Text style={styles.addPhotoIcon}>+</Text>
-                    <Text style={styles.addPhotoLabel}>Add</Text>
+                    {uploadingPhoto ? (
+                      <ActivityIndicator size="small" color={colors.primaryDark} />
+                    ) : (
+                      <>
+                        <Text style={styles.addPhotoIcon}>+</Text>
+                        <Text style={styles.addPhotoLabel}>Add</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 ) : null
               }
@@ -991,6 +1086,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 14,
   },
+  thumbnailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   addPhotoButton: {
     width: 88,
     height: 88,
@@ -1001,6 +1103,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
+  },
+  addPhotoButtonDisabled: {
+    opacity: 0.6,
   },
   addPhotoIcon: {
     fontSize: 24,

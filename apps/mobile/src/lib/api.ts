@@ -68,11 +68,18 @@ export const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,
     }),
-  updateListing: (id: string, data: FormData) =>
-    apiClient.put(`/listings/${id}`, data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
-    }),
+  updateListing: (
+    id: string,
+    data: { title: string; description: string; price: string; condition: string; categoryId: string },
+  ) => apiClient.put(`/listings/${id}`, data),
+  addListingImages: (listingId: string, formData: FormData) =>
+    apiClient.post<{ images: { id: string; url: string; order: number }[] }>(
+      `/listings/${listingId}/images`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 },
+    ),
+  deleteListingImage: (listingId: string, imageId: string) =>
+    apiClient.delete<{ success: boolean }>(`/listings/${listingId}/images/${imageId}`),
   deleteListing: (id: string) => apiClient.delete(`/listings/${id}`),
   markListingSold: (id: string, buyerId?: string) =>
     apiClient.patch(`/listings/${id}/status`, { status: 'SOLD', ...(buyerId && { buyerId }) }),
