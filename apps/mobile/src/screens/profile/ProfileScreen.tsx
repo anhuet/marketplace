@@ -91,26 +91,28 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
     [user?.id],
   );
 
+  const inviteCodeRef = useRef<string | null>(null);
+  inviteCodeRef.current = inviteCode;
+
   const loadInviteCode = useCallback(async () => {
     setInviteLoading(true);
     try {
       const res = await api.getMyInviteCode();
       setInviteCode(res.data.code);
     } catch {
-      // Non-critical — silently fail
+      setInviteCode(null);
     } finally {
       setInviteLoading(false);
     }
   }, []);
 
-  const hasLoadedOnce = useRef(false);
-
   useFocusEffect(
     useCallback(() => {
-      if (!hasLoadedOnce.current) {
-        // First focus: also load invite code (static, only need once)
+      // Re-fetch invite code on every focus when we don't have one yet.
+      // The previous "load once" guard left the UI stuck on "unavailable"
+      // if the first fetch failed (e.g. token still rehydrating).
+      if (!inviteCodeRef.current) {
         loadInviteCode();
-        hasLoadedOnce.current = true;
       }
       loadReviews(1);
     }, [loadReviews, loadInviteCode]),
