@@ -15,7 +15,12 @@ export type AuthStackParamList = {
 export type BrowseStackParamList = {
   Browse: undefined;
   ListingDetail: { listingId: string };
-  ChatThread: { conversationId: string; listingTitle: string };
+  ChatThread: {
+    conversationId: string;
+    listingTitle: string;
+    otherUserName?: string;
+    otherUserAvatarUrl?: string | null;
+  };
   UserProfile: { userId: string; sellerName?: string; sellerAvatarUrl?: string | null };
   WriteReview: {
     listingId: string;
@@ -28,12 +33,24 @@ export type BrowseStackParamList = {
 // Messages Stack
 export type MessagesStackParamList = {
   Messages: undefined;
-  ChatThread: { conversationId: string; listingTitle: string };
+  ChatThread: {
+    conversationId: string;
+    listingTitle: string;
+    otherUserName?: string;
+    otherUserAvatarUrl?: string | null;
+  };
 };
 
 // Sell Stack
 export type SellStackParamList = {
-  PostListing: { listingId?: string; pickedLatitude?: number; pickedLongitude?: number; pickedAddress?: string } | undefined;
+  PostListing:
+    | {
+        listingId?: string;
+        pickedLatitude?: number;
+        pickedLongitude?: number;
+        pickedAddress?: string;
+      }
+    | undefined;
   LocationPicker: { latitude: number; longitude: number };
 };
 
@@ -44,7 +61,12 @@ export type ProfileStackParamList = {
   Settings: undefined;
   MyListings: undefined;
   ConversationList: undefined;
-  ChatThread: { conversationId: string; listingTitle: string };
+  ChatThread: {
+    conversationId: string;
+    listingTitle: string;
+    otherUserName?: string;
+    otherUserAvatarUrl?: string | null;
+  };
   UserProfile: { userId: string; sellerName?: string; sellerAvatarUrl?: string | null };
   ListingDetail: { listingId: string };
   WriteReview: {
@@ -85,20 +107,20 @@ export type RootStackParamList = {
 };
 
 // Screen props helpers
-export type AuthStackScreenProps<T extends keyof AuthStackParamList> =
-  NativeStackScreenProps<AuthStackParamList, T>;
+export type AuthStackScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<
+  AuthStackParamList,
+  T
+>;
 
-export type BrowseStackScreenProps<T extends keyof BrowseStackParamList> =
-  CompositeScreenProps<
-    NativeStackScreenProps<BrowseStackParamList, T>,
-    BottomTabScreenProps<MainTabParamList>
-  >;
+export type BrowseStackScreenProps<T extends keyof BrowseStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<BrowseStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
+>;
 
-export type MessagesStackScreenProps<T extends keyof MessagesStackParamList> =
-  CompositeScreenProps<
-    NativeStackScreenProps<MessagesStackParamList, T>,
-    BottomTabScreenProps<MainTabParamList>
-  >;
+export type MessagesStackScreenProps<T extends keyof MessagesStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<MessagesStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
+>;
 
 export type MyListingsStackScreenProps<T extends keyof MyListingsStackParamList> =
   CompositeScreenProps<
@@ -106,14 +128,12 @@ export type MyListingsStackScreenProps<T extends keyof MyListingsStackParamList>
     BottomTabScreenProps<MainTabParamList>
   >;
 
-export type SavedStackScreenProps<T extends keyof SavedStackParamList> =
-  CompositeScreenProps<
-    NativeStackScreenProps<SavedStackParamList, T>,
-    BottomTabScreenProps<MainTabParamList>
-  >;
+export type SavedStackScreenProps<T extends keyof SavedStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<SavedStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
+>;
 
-export type ProfileStackScreenProps<T extends keyof ProfileStackParamList> =
-  CompositeScreenProps<
-    NativeStackScreenProps<ProfileStackParamList, T>,
-    BottomTabScreenProps<MainTabParamList>
-  >;
+export type ProfileStackScreenProps<T extends keyof ProfileStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
+>;

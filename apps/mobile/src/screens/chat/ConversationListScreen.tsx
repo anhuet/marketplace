@@ -206,12 +206,22 @@ export default function ConversationListScreen(): React.JSX.Element {
 
   const handlePress = useCallback(
     (conversation: ConversationWithDetails) => {
+      const isBuyer = conversation.buyer.id === currentUser?.id;
+      const rawConv = conversation as unknown as { listing: RawConversation['listing'] };
+      const otherUserName = isBuyer
+        ? (rawConv.listing.seller?.displayName ?? 'Seller')
+        : conversation.buyer.displayName;
+      const otherUserAvatarUrl = isBuyer
+        ? (rawConv.listing.seller?.avatarUrl ?? null)
+        : conversation.buyer.avatarUrl;
       navigation.navigate('ChatThread', {
         conversationId: conversation.id,
         listingTitle: conversation.listing.title,
+        otherUserName,
+        otherUserAvatarUrl,
       });
     },
-    [navigation],
+    [navigation, currentUser],
   );
 
   if (loading && conversations.length === 0) {

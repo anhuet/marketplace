@@ -253,6 +253,8 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
       navigation.navigate('ChatThread', {
         conversationId: conversation.id,
         listingTitle: listing.title,
+        otherUserName: listing.seller?.displayName,
+        otherUserAvatarUrl: listing.seller?.avatarUrl ?? null,
       });
     } catch {
       Alert.alert('Error', 'Could not start conversation. Please try again.');

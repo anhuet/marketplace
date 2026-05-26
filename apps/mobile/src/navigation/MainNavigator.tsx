@@ -14,6 +14,7 @@ import {
 } from './types';
 import { colors, spacing } from '../theme/tokens';
 import { useChatStore } from '../store/chatStore';
+import ChatHeaderTitle from './ChatHeaderTitle';
 
 import BrowseScreen from '../screens/browse/BrowseScreen';
 import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
@@ -46,7 +47,15 @@ function BrowseNavigator() {
       <BrowseStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
-        options={({ route }) => ({ title: route.params.listingTitle })}
+        options={({ route }) => ({
+          headerTitle: () => (
+            <ChatHeaderTitle
+              otherUserName={route.params.otherUserName}
+              otherUserAvatarUrl={route.params.otherUserAvatarUrl}
+              listingTitle={route.params.listingTitle}
+            />
+          ),
+        })}
       />
       <BrowseStack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
       <BrowseStack.Screen
@@ -65,7 +74,15 @@ function MessagesNavigator() {
       <MessagesStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
-        options={({ route }) => ({ title: route.params.listingTitle })}
+        options={({ route }) => ({
+          headerTitle: () => (
+            <ChatHeaderTitle
+              otherUserName={route.params.otherUserName}
+              otherUserAvatarUrl={route.params.otherUserAvatarUrl}
+              listingTitle={route.params.listingTitle}
+            />
+          ),
+        })}
       />
     </MessagesStack.Navigator>
   );
@@ -99,7 +116,15 @@ function ProfileNavigator() {
       <ProfileStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
-        options={({ route }) => ({ title: route.params.listingTitle })}
+        options={({ route }) => ({
+          headerTitle: () => (
+            <ChatHeaderTitle
+              otherUserName={route.params.otherUserName}
+              otherUserAvatarUrl={route.params.otherUserAvatarUrl}
+              listingTitle={route.params.listingTitle}
+            />
+          ),
+        })}
       />
       <ProfileStack.Screen name="MyListings" component={MyListingsScreen} options={{ title: 'My Listings' }} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
