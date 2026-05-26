@@ -21,7 +21,6 @@ export interface UpdateListingInput {
   latitude?: number;
   longitude?: number;
   categoryId?: string;
-  imageUrls?: string[];
 }
 
 const listingInclude = {
@@ -104,30 +103,86 @@ export async function updateListing(id: string, sellerId: string, input: UpdateL
   if (!listing || listing.status === ListingStatus.DELETED) return null;
   if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
 
-  const updated = await prisma.$transaction(async (tx) => {
-    if (input.imageUrls !== undefined) {
-      await tx.listingImage.deleteMany({ where: { listingId: id } });
-      await tx.listingImage.createMany({
-        data: input.imageUrls.map((url, index) => ({ listingId: id, url, order: index })),
-      });
-    }
-
-    return tx.listing.update({
-      where: { id },
-      data: {
-        ...(input.title !== undefined && { title: input.title }),
-        ...(input.description !== undefined && { description: input.description }),
-        ...(input.price !== undefined && { price: new Prisma.Decimal(input.price) }),
-        ...(input.condition !== undefined && { condition: input.condition }),
-        ...(input.latitude !== undefined && { latitude: input.latitude }),
-        ...(input.longitude !== undefined && { longitude: input.longitude }),
-        ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
-      },
-      include: listingInclude,
-    });
+  const updated = await prisma.listing.update({
+    where: { id },
+    data: {
+      ...(input.title !== undefined && { title: input.title }),
+      ...(input.description !== undefined && { description: input.description }),
+      ...(input.price !== undefined && { price: new Prisma.Decimal(input.price) }),
+      ...(input.condition !== undefined && { condition: input.condition }),
+      ...(input.latitude !== undefined && { latitude: input.latitude }),
+      ...(input.longitude !== undefined && { longitude: input.longitude }),
+      ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
+    },
+    include: listingInclude,
   });
 
   return presignListingImages(updated);
+}
+
+export async function addListingImages(
+  listingId: string,
+  sellerId: string,
+  newImageUrls: string[],
+) {
+  const listing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    include: { images: { select: { order: true } } },
+  });
+  if (!listing || listing.status === ListingStatus.DELETED) return null;
+  if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
+
+  const currentCount = listing.images.length;
+  const MAX_IMAGES = 8;
+  if (currentCount + newImageUrls.length > MAX_IMAGES) {
+    throw new Error(`EXCEEDS_MAX_IMAGES:${MAX_IMAGES}`);
+  }
+
+  const maxOrder = listing.images.reduce((max: number, img: { order: number }) => Math.max(max, img.order), -1);
+
+  const created = await Promise.all(
+    newImageUrls.map((url, idx) =>
+      prisma.listingImage.create({
+        data: { listingId, url, order: maxOrder + 1 + idx },
+      }),
+    ),
+  );
+
+  return Promise.all(
+    created.map(async (img) => {
+      let url = img.url;
+      try {
+        url = await getPresignedUrl(img.url);
+      } catch {
+        // fall back to stored URL
+      }
+      return { id: img.id, url, order: img.order };
+    }),
+  );
+}
+
+export async function deleteListingImage(
+  listingId: string,
+  imageId: string,
+  sellerId: string,
+): Promise<{ deletedUrl: string } | null> {
+  const listing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    include: { images: { select: { id: true, url: true, order: true } } },
+  });
+  if (!listing || listing.status === ListingStatus.DELETED) return null;
+  if (listing.sellerId !== sellerId) throw new Error('FORBIDDEN');
+
+  const image = listing.images.find((img: { id: string; url: string; order: number }) => img.id === imageId);
+  if (!image) throw new Error('IMAGE_NOT_FOUND');
+
+  if (listing.images.length <= 1) {
+    throw new Error('LAST_IMAGE');
+  }
+
+  await prisma.listingImage.delete({ where: { id: imageId } });
+
+  return { deletedUrl: image.url };
 }
 
 export async function softDeleteListing(id: string, sellerId: string) {

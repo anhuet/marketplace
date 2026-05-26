@@ -397,12 +397,20 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### PUT /api/v1/listings/:id
 
 **Auth required**: Yes
-**Description**: Replaces the editable fields of a listing. Only the listing owner may call this endpoint. Sending new `images` files replaces all existing images; omitting `images` leaves them unchanged.
+**Description**: Updates the editable metadata fields of a listing. Only the listing owner may call this endpoint. Images are managed independently via `POST /listings/:id/images` and `DELETE /listings/:id/images/:imageId` — this endpoint does not accept image files.
 
 **Path parameters**:
 - `id` — listing UUID
 
-**Request**: `multipart/form-data` — same fields as POST, all optional.
+**Request body** (JSON — all fields optional):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string (3–100 chars) | Listing headline |
+| `description` | string (10–2000 chars) | Full item description |
+| `price` | number ≥ 0 | Asking price |
+| `condition` | enum | `NEW`, `LIKE_NEW`, `GOOD`, `FAIR`, or `POOR` |
+| `categoryId` | UUID string | ID of an existing category |
 
 **Response 200**:
 ```json
@@ -501,6 +509,61 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 - `401` — Missing or invalid Auth0 Bearer token
 - `403` — Authenticated user is not the listing owner
 - `404` — Listing not found or soft-deleted
+
+---
+
+### POST /api/v1/listings/:id/images
+
+**Auth required**: Yes
+**Description**: Appends one or more images to an existing listing. Only the listing owner may call this endpoint. Images are uploaded to S3 and appended after the current highest-order image. The total number of images on the listing after the upload must not exceed 8.
+
+**Path parameters**:
+- `id` — listing UUID
+
+**Request**: `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `images` | file(s) | Yes | 1–N image files (JPEG, PNG, etc.; max 10 MB each). Total images on listing must not exceed 8 after upload. |
+
+**Response 201**:
+```json
+{
+  "images": [
+    { "id": "string — UUID", "url": "string — presigned HTTPS URL", "order": "number" }
+  ]
+}
+```
+
+**Error codes**:
+- `400` — Validation error (no images provided, would exceed 8-image limit)
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Authenticated user is not the listing owner
+- `404` — Listing not found or soft-deleted
+
+---
+
+### DELETE /api/v1/listings/:id/images/:imageId
+
+**Auth required**: Yes
+**Description**: Removes a single image from a listing. The image is deleted from both the database and S3. Only the listing owner may call this endpoint. The last remaining image on a listing cannot be deleted — at least one image must remain at all times.
+
+**Path parameters**:
+- `id` — listing UUID
+- `imageId` — image UUID
+
+**Response 200**:
+```json
+{
+  "success": true
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+- `403` — Authenticated user is not the listing owner
+- `404` — Listing not found or soft-deleted, or image not found on this listing
+- `422` — Listing must have at least one image (error code `UNPROCESSABLE`)
 
 ---
 

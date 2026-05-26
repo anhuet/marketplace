@@ -11,6 +11,8 @@ import {
   updateListingStatusHandler,
   getSellerListingsHandler,
   getListingBuyersHandler,
+  addListingImagesHandler,
+  deleteListingImageHandler,
 } from '../controllers/listingController';
 
 const router = Router();
@@ -38,9 +40,13 @@ router.get('/:id', getListingHandler);
 
 // Authenticated routes
 router.post('/', requireAuth, attachUser, requireActiveUser, uploadImages, createListingHandler);
-router.put('/:id', requireAuth, attachUser, requireActiveUser, uploadImages, updateListingHandler);
+router.put('/:id', requireAuth, attachUser, requireActiveUser, updateListingHandler);
 router.delete('/:id', requireAuth, attachUser, deleteListingHandler);
 router.patch('/:id/status', requireAuth, attachUser, updateListingStatusHandler);
 router.get('/:id/buyers', requireAuth, attachUser, getListingBuyersHandler);
+
+// Image management
+router.post('/:id/images', requireAuth, attachUser, requireActiveUser, uploadImages, addListingImagesHandler);
+router.delete('/:id/images/:imageId', requireAuth, attachUser, deleteListingImageHandler);
 
 export default router;

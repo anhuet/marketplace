@@ -9,8 +9,10 @@ import {
   updateListingStatus,
   getSellerListings,
   getListingBuyers,
+  addListingImages,
+  deleteListingImage,
 } from '../services/listingService';
-import { uploadImageToS3 } from '../lib/s3';
+import { uploadImageToS3, deleteImageFromS3 } from '../lib/s3';
 import { Condition, ListingStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
@@ -112,10 +114,6 @@ export async function updateListingHandler(
       throw new AppError(400, 'VALIDATION_ERROR', parsed.error.errors[0]?.message ?? 'Invalid input');
     }
 
-    const imageUrls =
-      req.files && (req.files as Express.Multer.File[]).length > 0
-        ? await processUploadedImages(req)
-        : undefined;
     const categoryId = parsed.data.categoryId
       ? await resolveCategoryId(parsed.data.categoryId)
       : undefined;
@@ -127,11 +125,76 @@ export async function updateListingHandler(
     const listing = await updateListing(req.params.id, req.dbUser!.id, {
       ...editableFields,
       ...(categoryId !== undefined && { categoryId }),
-      ...(imageUrls !== undefined && { imageUrls }),
     }).catch(handleOwnershipError);
 
     if (!listing) throw new AppError(404, 'NOT_FOUND', 'Listing not found');
     res.json({ listing });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function addListingImagesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const imageUrls = await processUploadedImages(req);
+    if (imageUrls.length === 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'At least one image is required');
+    }
+
+    const result = await addListingImages(
+      req.params.id,
+      req.dbUser!.id,
+      imageUrls,
+    ).catch((err: Error) => {
+      if (err.message === 'FORBIDDEN') handleOwnershipError(err);
+      if (err.message.startsWith('EXCEEDS_MAX_IMAGES')) {
+        throw new AppError(400, 'VALIDATION_ERROR', `Maximum ${MAX_IMAGES} images allowed per listing`);
+      }
+      throw err;
+    });
+
+    if (result === null) throw new AppError(404, 'NOT_FOUND', 'Listing not found');
+    res.status(201).json({ images: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteListingImageHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id: listingId, imageId } = req.params;
+
+    const deleted = await deleteListingImage(listingId, imageId, req.dbUser!.id).catch(
+      (err: Error) => {
+        if (err.message === 'FORBIDDEN') handleOwnershipError(err);
+        if (err.message === 'IMAGE_NOT_FOUND') {
+          throw new AppError(404, 'NOT_FOUND', 'Image not found on this listing');
+        }
+        if (err.message === 'LAST_IMAGE') {
+          throw new AppError(422, 'UNPROCESSABLE', 'Listing must have at least one image');
+        }
+        throw err;
+      },
+    );
+
+    if (deleted === null) throw new AppError(404, 'NOT_FOUND', 'Listing not found');
+
+    try {
+      await deleteImageFromS3(deleted.deletedUrl);
+    } catch (s3Err) {
+      // Log warning but do not fail the request — DB row is already gone
+      console.warn('Failed to delete S3 object, manual cleanup may be needed:', deleted.deletedUrl, s3Err);
+    }
+
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }
