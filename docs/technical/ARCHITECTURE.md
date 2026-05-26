@@ -33,7 +33,7 @@ Marketplace is a mobile-first peer-to-peer marketplace application. Users discov
 **External systems**:
 - **Auth0** -- identity provider for user authentication (OAuth2 / JWT)
 - **Expo Push Notifications** -- delivers push notifications to mobile devices
-- **AWS S3** -- image storage for listing photos (planned)
+- **AWS S3** -- image storage for listing photos and avatars
 
 ---
 
@@ -92,7 +92,7 @@ See [DECISIONS.md](./DECISIONS.md) for the full ADR log.
 
 - **Authentication**: Auth0 handles identity. Backend validates JWTs on every request via `express-jwt` + `jwks-rsa`.
 - **Authorization**: Route-level middleware checks resource ownership (e.g., only the seller can edit their listing).
-- **Secrets**: Never committed to source. Managed via environment variables (`.env` files, excluded from git).
+- **Secrets**: Never committed to source. Managed via environment variables (`.env` files, excluded from git) and AWS Secrets Manager in production.
 - **Data classification**: User PII (email, GPS coordinates) is considered sensitive. Listing data is public.
 
 ---

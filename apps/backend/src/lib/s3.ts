@@ -59,6 +59,29 @@ export async function uploadImageToS3(
   return `${CDN_URL}/${key}`;
 }
 
+/**
+ * Uploads an image buffer to a caller-specified S3 key.
+ * Applies the same optimisation pipeline (EXIF strip, resize, JPEG conversion).
+ * Returns the full CDN URL for the uploaded object.
+ */
+export async function uploadImageToS3WithKey(
+  buffer: Buffer,
+  key: string,
+): Promise<string> {
+  const optimised = await optimiseImage(buffer);
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: optimised,
+      ContentType: 'image/jpeg',
+    }),
+  );
+
+  return `${CDN_URL}/${key}`;
+}
+
 export async function deleteImageFromS3(url: string): Promise<void> {
   const key = url.replace(`${CDN_URL}/`, '');
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));

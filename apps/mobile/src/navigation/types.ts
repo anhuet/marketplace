@@ -6,7 +6,9 @@ import { CompositeScreenProps } from '@react-navigation/native';
 export type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
-  ProfileSetup: { inviteCode: string };
+  /** inviteCode is present for new sign-ups; absent when an existing user is
+   *  redirected here because needsDisplayNameSetup is true. */
+  ProfileSetup: { inviteCode?: string } | undefined;
 };
 
 // Browse Stack

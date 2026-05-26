@@ -22,6 +22,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 | 403 | `FORBIDDEN` | Authenticated but not authorised to access this resource |
 | 404 | `NOT_FOUND` | Resource does not exist |
 | 409 | `CONFLICT` | Resource already exists or state conflict |
+| 409 | `DISPLAY_NAME_TAKEN` | The requested display name is already in use |
 | 422 | `UNPROCESSABLE` | Semantically invalid request |
 | 429 | `RATE_LIMITED` | Too many requests |
 | 500 | `INTERNAL_ERROR` | Unexpected server error |
@@ -116,7 +117,9 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
     "id": "string — UUID",
     "auth0Id": "string",
     "email": "string",
-    "displayName": "string",
+    "displayName": "string | null",
+    "displayNameLower": "string | null",
+    "needsDisplayNameSetup": "boolean",
     "avatarUrl": "string | null",
     "bio": "string | null",
     "averageRating": "number",
@@ -187,12 +190,12 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### PATCH /api/v1/users/me
 
 **Auth required**: Yes
-**Description**: Updates the authenticated user's own profile. All fields are optional — only the fields provided are updated. Pass `null` for `bio` or `avatarUrl` to explicitly clear those fields.
+**Description**: Updates the authenticated user's own profile. All fields are optional — only the fields provided are updated. Pass `null` for `bio` or `avatarUrl` to explicitly clear those fields. When `displayName` is supplied, case-insensitive uniqueness is enforced via the `users.display_name_lower` partial unique index; collisions return 409 `DISPLAY_NAME_TAKEN`.
 
 **Request body**:
 ```json
 {
-  "displayName": "string — optional, 1–60 chars",
+  "displayName": "string — optional, 3–30 chars, regex ^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{1,28}[a-zA-Z0-9])?$",
   "bio": "string | null — optional, max 300 chars; null clears the field",
   "avatarUrl": "string | null — optional, must be a valid URL; null clears the field"
 }
@@ -205,7 +208,9 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
     "id": "string — UUID",
     "auth0Id": "string",
     "email": "string",
-    "displayName": "string",
+    "displayName": "string | null",
+    "displayNameLower": "string | null",
+    "needsDisplayNameSetup": "boolean",
     "avatarUrl": "string | null",
     "bio": "string | null",
     "averageRating": "number",
@@ -217,7 +222,69 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ```
 
 **Error codes**:
-- `400` — Validation error (displayName too long, bio too long, invalid avatarUrl format)
+- `400` — Validation error (displayName out of bounds, invalid format, reserved word; bio too long; invalid avatarUrl format)
+- `401` — Missing or invalid Auth0 Bearer token
+- `409` (`DISPLAY_NAME_TAKEN`) — The chosen display name is already taken (case-insensitive)
+
+---
+
+### GET /api/v1/users/check-displayname
+
+**Auth required**: Yes
+**Description**: Real-time availability check for a display name before the user submits the profile setup form. Always returns HTTP 200 — use the `available` field to determine the result.
+
+**Query parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | The display name to check (3–30 chars) |
+
+**Response 200**:
+```json
+{
+  "available": "boolean",
+  "reason": "string | undefined — 'taken' | 'invalid_format' | 'reserved' (only present when available is false)"
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+
+---
+
+### POST /api/v1/users/me/avatar
+
+**Auth required**: Yes
+**Description**: Uploads a new avatar image for the authenticated user. Accepts `multipart/form-data` with a single `avatar` field (image file, max 5 MB). The image is uploaded to S3 under `avatars/{userId}/{uuid}.{ext}` and the URL is stored on `users.avatar_url`.
+
+**Request**: `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avatar` | file | Yes | Image file (image/* MIME type, max 5 MB) |
+
+**Response 200**:
+```json
+{
+  "user": {
+    "id": "string — UUID",
+    "auth0Id": "string",
+    "email": "string",
+    "displayName": "string | null",
+    "displayNameLower": "string | null",
+    "needsDisplayNameSetup": "boolean",
+    "avatarUrl": "string — S3/CDN URL of the uploaded avatar",
+    "bio": "string | null",
+    "averageRating": "number",
+    "ratingCount": "number",
+    "createdAt": "string — ISO 8601",
+    "updatedAt": "string — ISO 8601"
+  }
+}
+```
+
+**Error codes**:
+- `400` — No file provided, file exceeds 5 MB, or non-image MIME type
 - `401` — Missing or invalid Auth0 Bearer token
 
 ---

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,8 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 
-import { api } from '../../lib/api';
+import { api, usersApi } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { ProfileStackScreenProps } from '../../navigation/types';
@@ -23,6 +24,8 @@ import type { ProfileStackScreenProps } from '../../navigation/types';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Props = ProfileStackScreenProps<'EditProfile'>;
+
+type AvailabilityState = 'idle' | 'checking' | 'available' | 'unavailable';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -45,6 +48,15 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
+  const [availabilityState, setAvailabilityState] = useState<AvailabilityState>('idle');
+
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
 
   // ── Avatar picker ────────────────────────────────────────────────────────
 
@@ -102,6 +114,64 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
     ]);
   };
 
+  // ── Debounced display name availability check (300 ms) ───────────────────
+  // Skip the check when the value equals the current user's name (case-insensitive).
+
+  const checkAvailability = useCallback(
+    (name: string) => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+      const trimmed = name.trim();
+
+      // Don't check against the user's own existing name
+      if (trimmed.toLowerCase() === (user?.displayName ?? '').toLowerCase()) {
+        setAvailabilityState('idle');
+        return;
+      }
+
+      if (trimmed.length === 0) {
+        setAvailabilityState('idle');
+        return;
+      }
+
+      setAvailabilityState('checking');
+
+      debounceTimer.current = setTimeout(async () => {
+        try {
+          const { data } = await usersApi.checkDisplayName(trimmed);
+          if (data.available) {
+            setAvailabilityState('available');
+            setDisplayNameError(null);
+          } else {
+            setAvailabilityState('unavailable');
+            switch (data.reason) {
+              case 'taken':
+                setDisplayNameError('That name is already taken.');
+                break;
+              case 'invalid_format':
+                setDisplayNameError('Name contains invalid characters or is too short.');
+                break;
+              case 'reserved':
+                setDisplayNameError('That name is reserved.');
+                break;
+              default:
+                setDisplayNameError('Name is not available.');
+            }
+          }
+        } catch {
+          setAvailabilityState('idle');
+        }
+      }, 300);
+    },
+    [user?.displayName],
+  );
+
+  const handleDisplayNameChange = (text: string) => {
+    setDisplayName(text);
+    if (displayNameError) setDisplayNameError(null);
+    checkAvailability(text);
+  };
+
   // ── Validation ────────────────────────────────────────────────────────────
 
   const validate = (): boolean => {
@@ -111,6 +181,9 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
     }
     if (displayName.trim().length > 60) {
       setDisplayNameError('Display name must be 60 characters or less.');
+      return false;
+    }
+    if (availabilityState === 'unavailable') {
       return false;
     }
     setDisplayNameError(null);
@@ -126,31 +199,79 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
     setApiError(null);
 
     try {
-      // TODO: backend endpoint needed — PATCH /api/v1/users/me does not yet exist on the backend.
-      // When implemented, it should accept { displayName, avatarUrl, bio } and return { user }.
-      await api.updateMe({
-        displayName: displayName.trim(),
-        // If avatar was changed to a local URI, upload it separately (requires a file upload endpoint).
-        // For now, pass the avatarUri if it is already an HTTPS URL (unchanged), or skip update.
-        avatarUrl: avatarUri?.startsWith('https') ? avatarUri : undefined,
-        bio: bio.trim() || undefined,
-      });
+      const trimmedName = displayName.trim();
+      const nameChanged =
+        trimmedName.toLowerCase() !== (user?.displayName ?? '').toLowerCase();
 
-      // Optimistically update the in-memory store with the new values.
+      // If name changed, do a final pre-save availability check
+      if (nameChanged) {
+        try {
+          const { data: checkData } = await usersApi.checkDisplayName(trimmedName);
+          if (!checkData.available) {
+            setDisplayNameError(
+              checkData.reason === 'taken'
+                ? 'That name was just taken. Try another.'
+                : 'Name is not available.',
+            );
+            setAvailabilityState('unavailable');
+            setSaving(false);
+            return;
+          }
+        } catch {
+          // Non-fatal — proceed and let the PATCH handle any conflict
+        }
+      }
+
+      // Upload avatar if a new local file URI was picked
+      const isLocalUri = avatarUri !== null && !avatarUri.startsWith('https');
+      if (isLocalUri && avatarUri) {
+        try {
+          const { data: avatarData } = await usersApi.uploadAvatar(avatarUri);
+          updateUser(avatarData.user);
+        } catch {
+          setApiError('Could not upload profile photo. Please try again.');
+          setSaving(false);
+          return;
+        }
+      }
+
+      // Build PATCH body — only include changed fields
+      const patchBody: { displayName?: string; bio?: string } = {};
+      if (nameChanged) patchBody.displayName = trimmedName;
+      const bioTrimmed = bio.trim() || '';
+      if (bioTrimmed !== (user?.bio ?? '')) patchBody.bio = bioTrimmed || undefined;
+
+      if (Object.keys(patchBody).length > 0) {
+        try {
+          await api.updateMe(patchBody);
+        } catch (err: unknown) {
+          if (axios.isAxiosError(err)) {
+            const status = err.response?.status;
+            const code = err.response?.data?.error?.code ?? err.response?.data?.code;
+            if (status === 409 || code === 'DISPLAY_NAME_TAKEN') {
+              setDisplayNameError('That name was just taken. Try another.');
+              setAvailabilityState('unavailable');
+              setSaving(false);
+              return;
+            }
+          }
+          setApiError('Could not save changes. Please check your connection and try again.');
+          setSaving(false);
+          return;
+        }
+      }
+
+      // Optimistically update in-memory store with text changes
       updateUser({
-        displayName: displayName.trim(),
+        displayName: trimmedName,
         bio: bio.trim() || null,
-        // Only update stored avatarUrl if it is a remote URL (local URIs cannot be persisted as-is).
-        avatarUrl: avatarUri?.startsWith('https') ? avatarUri : user?.avatarUrl ?? null,
       });
 
       navigation.goBack();
-    } catch {
-      setApiError('Could not save changes. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }
-  }, [displayName, avatarUri, bio, navigation, updateUser, user?.avatarUrl]);
+  }, [displayName, avatarUri, bio, navigation, updateUser, user, availabilityState]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -196,7 +317,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
                 accessibilityElementsHidden
                 importantForAccessibility="no"
               >
-                <Text style={styles.editAvatarIcon}>✎</Text>
+                <Text style={styles.editAvatarIcon}>&#x270E;</Text>
               </View>
             </TouchableOpacity>
             <Text style={styles.changePhotoLabel}>Tap to change photo</Text>
@@ -218,21 +339,44 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
             <Text style={styles.fieldLabel} nativeID="displayNameLabel">
               Display Name
             </Text>
-            <TextInput
-              style={[styles.input, displayNameError ? styles.inputError : null]}
-              value={displayName}
-              onChangeText={(text) => {
-                setDisplayName(text);
-                if (displayNameError) setDisplayNameError(null);
-              }}
-              placeholder="Your public name"
-              placeholderTextColor={colors.textSecondary}
-              maxLength={60}
-              returnKeyType="next"
-              accessibilityLabel="Display name"
-              accessibilityHint="Your publicly visible name, up to 60 characters"
-              aria-labelledby="displayNameLabel"
-            />
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.inputFlex,
+                  displayNameError ? styles.inputError : null,
+                ]}
+                value={displayName}
+                onChangeText={handleDisplayNameChange}
+                placeholder="Your public name"
+                placeholderTextColor={colors.textSecondary}
+                maxLength={60}
+                returnKeyType="next"
+                accessibilityLabel="Display name"
+                accessibilityHint="Your publicly visible name, up to 60 characters"
+                aria-labelledby="displayNameLabel"
+              />
+              {/* Availability indicator */}
+              <View
+                style={styles.availabilityBadge}
+                accessibilityLiveRegion="polite"
+                accessibilityRole="text"
+                accessibilityLabel={
+                  availabilityState === 'checking'
+                    ? 'Checking name availability'
+                    : availabilityState === 'available'
+                      ? 'Name is available'
+                      : undefined
+                }
+              >
+                {availabilityState === 'checking' && (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                )}
+                {availabilityState === 'available' && (
+                  <Text style={styles.availableText}>Available</Text>
+                )}
+              </View>
+            </View>
             {displayNameError ? (
               <Text
                 style={styles.fieldError}
@@ -254,7 +398,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
               style={[styles.input, styles.textArea]}
               value={bio}
               onChangeText={setBio}
-              placeholder="Tell others a bit about yourself…"
+              placeholder="Tell others a bit about yourself..."
               placeholderTextColor={colors.textSecondary}
               multiline
               numberOfLines={4}
@@ -271,11 +415,11 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
           <TouchableOpacity
             style={[styles.saveButton, saving && styles.saveButtonDisabled]}
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || availabilityState === 'checking'}
             accessibilityRole="button"
             accessibilityLabel="Save profile changes"
             accessibilityHint="Saves your updated display name and profile photo"
-            accessibilityState={{ disabled: saving }}
+            accessibilityState={{ disabled: saving || availabilityState === 'checking' }}
           >
             {saving ? (
               <ActivityIndicator size="small" color={colors.surface} />
@@ -378,6 +522,23 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     fontWeight: '400',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  inputFlex: {
+    flex: 1,
+  },
+  availabilityBadge: {
+    minWidth: 64,
+    alignItems: 'flex-start',
+  },
+  availableText: {
+    ...typography.caption,
+    color: colors.success,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: colors.surface,

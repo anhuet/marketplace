@@ -11,7 +11,19 @@ model User {
   id            String   @id @default(uuid())
   auth0Id       String   @unique @map("auth0_id")
   email         String   @unique
-  displayName   String   @map("display_name")
+  /// Nullable: NULL during the window between Auth0 signup and the user completing ProfileSetup.
+  /// Synced from Auth0 Management API; our DB is a read cache.
+  displayName   String?  @map("display_name")
+  /// Lowercase mirror of displayName, maintained by the application on every write to displayName.
+  /// Uniqueness enforced via partial unique index (WHERE display_name_lower IS NOT NULL) —
+  /// see migration 20260526000000_displayname_uniqueness. NOT declared @unique here because
+  /// Prisma would emit a full unique index; we need a partial index so NULL-name users
+  /// (in setup-pending state) do not collide with each other.
+  displayNameLower String? @map("display_name_lower")
+  /// True when the user must be routed through ProfileSetup to choose a display name.
+  /// Set to true for brand-new users and for existing users whose displayName matched
+  /// their email prefix (email-leak pattern). Cleared once the user saves a valid name.
+  needsDisplayNameSetup Boolean @default(false) @map("needs_display_name_setup")
   avatarUrl     String?  @map("avatar_url")
   bio           String?
   averageRating Float    @default(0) @map("average_rating")

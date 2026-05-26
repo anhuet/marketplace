@@ -47,7 +47,7 @@ export async function createReviewHandler(
           if (listing && reviewer) {
             void sendNewReviewNotification(
               data.revieweeId,
-              reviewer.displayName,
+              reviewer.displayName ?? 'User',
               data.rating,
               listing.title,
             );

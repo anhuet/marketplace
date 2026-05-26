@@ -82,7 +82,9 @@ export async function sendNewMessageNotification(
       : conversation.buyerId;
 
   const senderName =
-    senderId === conversation.buyerId ? conversation.buyer.displayName : 'Seller';
+    senderId === conversation.buyerId
+      ? (conversation.buyer.displayName ?? 'User')
+      : 'Seller';
 
   const preview =
     messageContent.length > 60 ? messageContent.slice(0, 57) + '...' : messageContent;

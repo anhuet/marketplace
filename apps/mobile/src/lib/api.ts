@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { User } from '@marketplace/shared';
 import { useAuthStore } from '../store/authStore';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://54.175.34.74/api/v1';
@@ -9,11 +10,16 @@ export const apiClient: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Inject Bearer token on every request
+// Inject Bearer token on every request.
+// For FormData requests, delete the default Content-Type so that React Native's
+// fetch layer can set it with the correct multipart boundary.
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
   }
   return config;
 });
@@ -124,4 +130,39 @@ export const api = {
     apiClient.post('/push-tokens', { token, platform }),
   deletePushToken: (token: string) =>
     apiClient.delete(`/push-tokens/${encodeURIComponent(token)}`),
+};
+
+// ── Users API ─────────────────────────────────────────────────────────────────
+
+export type DisplayNameCheckResult = {
+  available: boolean;
+  reason?: 'taken' | 'invalid_format' | 'reserved';
+};
+
+export const usersApi = {
+  /**
+   * Checks whether a display name is available and valid.
+   * Always returns HTTP 200 — inspect `available` and `reason` to determine outcome.
+   */
+  checkDisplayName: (name: string) =>
+    apiClient.get<DisplayNameCheckResult>('/users/check-displayname', { params: { name } }),
+
+  /**
+   * Uploads a new avatar image for the authenticated user.
+   * Accepts a local file URI (e.g. from expo-image-picker) and POSTs it as
+   * multipart/form-data under the field name `avatar`.
+   * The Content-Type header is intentionally omitted so React Native can set
+   * the correct multipart boundary automatically.
+   */
+  uploadAvatar: (fileUri: string) => {
+    const formData = new FormData();
+    formData.append('avatar', {
+      uri: fileUri,
+      name: 'avatar.jpg',
+      type: 'image/jpeg',
+    } as unknown as Blob);
+    return apiClient.post<{ user: User }>('/users/me/avatar', formData, {
+      timeout: 60000,
+    });
+  },
 };

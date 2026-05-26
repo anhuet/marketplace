@@ -11,7 +11,7 @@ Read by: @backend-developer (to write queries), @systems-architect (for scaling 
 > **Engine**: PostgreSQL 15 (AWS RDS, eu-west-1)
 > **ORM / Query layer**: Prisma 5.x
 > **Connection**: Via `DATABASE_URL` environment variable (see `.env.example`)
-> **Last updated**: 2026-05-20
+> **Last updated**: 2026-05-26
 
 ---
 
@@ -57,7 +57,9 @@ categories ──< listings
 | id | uuid | PK, NOT NULL, DEFAULT gen_random_uuid() | Internal primary key |
 | auth0_id | text | NOT NULL, UNIQUE | Auth0 `sub` claim — the permanent link between Auth0 and this record |
 | email | text | NOT NULL, UNIQUE | User's email address — sourced from Auth0, kept in sync |
-| display_name | text | NOT NULL | Publicly visible name chosen by the user |
+| display_name | text | NULL | Publicly visible name chosen by the user. NULL during the window between Auth0 signup and the user completing ProfileSetup. Source of truth lives in this column — Auth0 holds only the identity (`sub`, `email`) |
+| display_name_lower | text | NULL | Application-maintained lowercase mirror of `display_name`. Written by the application on every update to `display_name`. Uniqueness enforced via a partial unique index (`WHERE display_name_lower IS NOT NULL`) so users in setup-pending state (NULL) do not collide with each other |
+| needs_display_name_setup | boolean | NOT NULL, DEFAULT false | True when the user must complete ProfileSetup to choose a display name. Set for brand-new users and for existing users whose `display_name` matched their email prefix (PII-leak pattern). Cleared by the application once a valid name is saved |
 | avatar_url | text | NULL | URL to profile image (hosted on CDN / S3) |
 | bio | text | NULL | Optional free-text self-description |
 | average_rating | float8 | NOT NULL, DEFAULT 0 | Cached mean of all `reviews.rating` values received. Updated by application on each new review — avoids aggregation on every profile read |
@@ -69,12 +71,13 @@ categories ──< listings
 **Indexes**:
 - Implicit unique index on `auth0_id` — lookup on every authenticated request
 - Implicit unique index on `email` — deduplication on registration
+- `users_display_name_lower_key` — partial unique index on `(display_name_lower) WHERE display_name_lower IS NOT NULL` — enforces case-insensitive display name uniqueness; partial predicate means rows with NULL `display_name_lower` (users in setup-pending state) do not compete for the unique slot
 - Plain FK index on `invite_code_used_id` — supports lookups from users to their redeemed code (no uniqueness; Prisma does not generate this automatically, so it may need a manual `CREATE INDEX` if query volume warrants it)
 
 **Relationships**:
 - `invite_code_used_id` → `invite_codes.id` (no cascade — retain invite record if user is deleted)
 
-**Notes**: Hard deletes are used. Listings and conversations should be anonymised or cascade-deleted before user deletion. `average_rating` and `rating_count` are denormalised for read performance — keep them consistent via the review creation transaction.
+**Notes**: Hard deletes are used. Listings and conversations should be anonymised or cascade-deleted before user deletion. `average_rating` and `rating_count` are denormalised for read performance — keep them consistent via the review creation transaction. `display_name` is now nullable — application code that reads this field must handle NULL (e.g. fall back to a placeholder in listing cards and chat until the user completes setup).
 
 ---
 
@@ -295,6 +298,7 @@ categories ──< listings
 | `20260421000000_add_saved_listings` | 2026-04-21 | Add `saved_listings` table for bookmarking listings | Yes — drop table | None — additive change |
 | `20260421100000_add_buyer_to_listing` | 2026-04-21 | Add nullable `buyer_id` column to `listings` | Yes — drop column | None — additive change |
 | `20260520000000_multi_use_invite_codes` | 2026-05-20 | Drop UNIQUE index on `users.invite_code_used_id`; drop `used_at` column from `invite_codes` — codes are now unlimited-use | Partial — index can be recreated; `used_at` data is permanently lost (4 rows affected in production) | Low — `DROP INDEX` is fast; `DROP COLUMN` acquires a brief ACCESS EXCLUSIVE lock but completes in milliseconds on a small table |
+| `20260526000000_displayname_uniqueness` | 2026-05-26 | Make `display_name` nullable; add `display_name_lower` (text, nullable) and `needs_display_name_setup` (boolean, NOT NULL DEFAULT false); backfill `display_name_lower` from existing names; flag email-prefix users with `needs_display_name_setup = true`; create partial unique index `users_display_name_lower_key WHERE display_name_lower IS NOT NULL` | Yes — drop columns + index (rollback of `SET NOT NULL` on `display_name` will fail if any row has NULL at rollback time; see migration comments) | Low — all DDL operations are metadata-only or fast index builds on a small table; no table rewrite; no downtime required |
 
 ---
 
@@ -436,6 +440,17 @@ Only listings use a soft delete (`status = 'DELETED'`). Users, conversations, me
 
 ### Review direction uniqueness
 The UNIQUE constraint on `(listing_id, reviewer_id, reviewee_id)` permits two reviews per listing (buyer reviews seller, and potentially seller reviews buyer in future) without allowing duplicates in either direction. In v1 only the buyer-reviews-seller direction is implemented.
+
+### DisplayName uniqueness model
+The `users` table is the source of truth for `display_name` and `avatar_url`. Auth0 is identity-only (login, JWT validation) and does not store profile fields. See [ADR-008](./DECISIONS.md#adr-008-rds-as-source-of-truth-for-profile-fields-supersedes-adr-007) for the rationale.
+
+**Case-insensitive uniqueness**: A second column, `display_name_lower`, holds the `lower(display_name)` value and carries a partial unique index (`WHERE display_name_lower IS NOT NULL`). The application must write both columns atomically on every `display_name` update. This approach was chosen over a `GENERATED ALWAYS AS` computed column because PostgreSQL does not allow unique indexes directly on generated columns used in `WHERE` clauses in all versions, and because keeping it application-maintained makes the contract explicit and auditable.
+
+**NULL semantics**: `display_name` and `display_name_lower` are nullable. NULL means the user is in a setup-pending state — they have authenticated via Auth0 but have not yet completed ProfileSetup to choose a name. Multiple users may be in this state simultaneously without violating the partial unique index (NULLs are excluded by the `WHERE` predicate).
+
+**Setup flag**: `needs_display_name_setup = true` signals to the mobile app that the user must be routed through ProfileSetup before using the main app. It is set for brand-new users and for existing users whose `display_name` at migration time was their email local-part (the email-prefix PII leak). The application clears this flag once the user saves a valid, unique display name.
+
+**Application invariants the DB cannot enforce alone**: The partial unique index prevents two users with identical lowercased names from coexisting. However, `display_name` case (e.g., "Andy" vs "andy") is free-form — the uniqueness check must be performed by the application before writing, using a `SELECT 1 FROM users WHERE display_name_lower = lower($input)` query. A race condition between two concurrent requests is caught by the unique index violation, which the application must handle and surface as a user-friendly error.
 
 ---
 

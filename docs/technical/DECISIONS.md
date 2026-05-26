@@ -147,3 +147,55 @@ The listing detail screen needs a "Similar Items" section showing 4-6 related li
 - **Positive**: Zero infrastructure cost; ships in days not weeks; predictable query performance; no new operational burden; fallback strategy ensures the section is populated in most cases.
 - **Negative**: Cannot find cross-category similarities (an iPhone case is not "similar" to an iPhone); no personalization; in-memory cache does not share across multiple ECS tasks (acceptable at current single-task scale).
 - **Neutral**: The endpoint contract (`GET /api/v1/listings/:id/similar`) is stable regardless of the underlying implementation. Swapping to Elasticsearch later requires only a service-layer change, not an API change.
+
+---
+
+## ADR-007: Auth0 user_metadata as Source of Truth for Profile Fields
+
+**Date**: 2026-05-26
+**Status**: Rejected — superseded by [ADR-008](#adr-008-rds-as-source-of-truth-for-profile-fields-supersedes-adr-007)
+**Deciders**: @systems-architect
+
+> **Update 2026-05-26**: This decision was reversed the same day after implementation review. The Auth0 Management API integration was removed; RDS is now the source of truth. See ADR-008 for the rationale. Body retained below for historical context.
+
+### Context
+After launch, users complained that displayName defaulted to their email prefix (a PII leak risk). The fix required a decision about where the canonical profile data lives: in our database, in Auth0 user_metadata, or both with one as master.
+
+### Options Considered
+1. **Auth0 user_metadata as master, our DB caches the value** (chosen) — Pros: Single source of truth across all auth-aware systems; future SSO/social providers can pre-populate user_metadata; profile data survives a DB wipe (or migration to a different DB); Auth0 is the identity system, so profile should live there. Cons: Extra Auth0 API call on every profile write; Management API rate limits apply (2 req/s per tenant on free tier, higher on paid plans); our DB must be reconciled if Auth0 metadata is edited directly via the Auth0 dashboard; outages in Auth0 Management API prevent profile edits (though reads are unaffected since we cache).
+2. **Our DB as master, mirror to Auth0 best-effort** — Pros: Simpler write path; no external dependency for save success. Cons: Auth0 drifts silently if mirror fails; profile data is not portable if we change identity providers; can't use Auth0 metadata in rules/actions reliably.
+3. **DB only, ignore Auth0 metadata** — Pros: Simplest, no external calls. Cons: Locks us out of Auth0 features (rules, actions, social providers that read user_metadata); profile data isn't portable across identity provider changes.
+
+### Decision
+**Option 1: Auth0 user_metadata is the master for `name` and `picture`.** Our database stores them as a cache for fast queries (listing cards, chat, reviews) without hitting Auth0 on every read. Case-insensitive uniqueness is enforced in our DB via a partial unique index on `display_name_lower`, checked before the Auth0 write. If the Auth0 write fails, our DB is not modified (Auth0 stays master). Avatar uploads land in S3 first, then the URL is written to Auth0, then cached in our DB.
+
+The `needsDisplayNameSetup` flag is a local state machine in our DB — it tracks whether the user must complete ProfileSetup before using the app. When set, it overrides any cached displayName for UI routing purposes.
+
+### Consequences
+- **Positive**: Profile is portable across identity events; future SSO providers can pre-populate user_metadata; clearer security boundary (PII lives in the identity provider, not in our app DB as master); Auth0 user_metadata is available in Auth0 rules and actions for future workflows.
+- **Negative**: Write path now requires Auth0 Management API availability — outages prevent profile edits (read path is unaffected since we cache). Free-tier rate limit (2 req/s) must be monitored if traffic grows; will need paid Auth0 plan if this becomes a bottleneck. Developers updating profile fields must use the controller helpers, not write directly to Prisma — this is a code-review discipline, not enforced by the schema.
+- **Neutral**: The `display_name_lower` partial unique index and `needsDisplayNameSetup` flag are DB-only concerns for local state management; Auth0 doesn't know about them.
+
+---
+
+## ADR-008: RDS as Source of Truth for Profile Fields (supersedes ADR-007)
+
+**Date**: 2026-05-26
+**Status**: Accepted
+**Deciders**: @systems-architect
+
+### Context
+ADR-007 set Auth0 user_metadata as the source of truth for `displayName` and `avatarUrl`, with our RDS database as a cache. After implementation, a review surfaced that the costs (extra ~400ms latency per profile write from the Auth0 Management API round-trip, free-tier rate limit of 2 req/s per tenant, ~200 extra lines of code for token caching, error mapping, and best-effort S3 cleanup on Auth0 failures) were not justified by the benefits for the current product stage. We do not currently use Auth0 Rules/Actions that read `user_metadata`, we do not have multiple apps sharing the Auth0 tenant, we do not have social login providers that pre-populate metadata, and we have no compliance requirement to separate identity data from app data.
+
+### Options Considered
+1. **Keep Auth0 user_metadata as master** (ADR-007 status quo) — Pros: portable across identity-provider changes; future SSO providers could pre-populate. Cons: 200–500ms write latency on every profile change; rate-limit risk; extra code complexity; Auth0 Management API outage blocks profile edits — none of these benefits are realized today.
+2. **RDS as master, no Auth0 sync** (chosen) — Pros: simple write path (~20ms); no external dependency for profile writes; less code to maintain; aligns with the rest of our data model where RDS is authoritative. Cons: profile data is not portable across identity providers without a migration step; cannot use Auth0 Rules/Actions to read these fields without adding a sync job later.
+3. **RDS as master with best-effort Auth0 mirror** — Pros: get the portability benefit. Cons: mirror failures cause silent drift between RDS and Auth0; debugging Auth0-dashboard vs RDS mismatches is painful — not worth it without a concrete consumer of Auth0-side reads.
+
+### Decision
+**Option 2: RDS is the source of truth for `display_name` and `avatar_url`.** Auth0 returns to its original role: identity provider only (login, JWT validation). Case-insensitive uniqueness is enforced via the partial unique index on `users.display_name_lower`. Avatar uploads land in S3 and the URL is stored directly on `users.avatar_url`. The `auth0ManagementService` and the three `AUTH0_MGMT_*` environment variables have been removed. The mobile app no longer handles a 502 `AUTH0_UPDATE_FAILED` error. We retain the option to add Auth0 metadata sync later as an additive change if a concrete need arises — e.g. enabling Auth0 Actions, adding social login with pre-populated profile, or splitting the app across multiple Auth0 clients.
+
+### Consequences
+- **Positive**: Simpler code path, lower latency on profile writes, no Auth0 rate-limit concerns, no dependency on Auth0 Management API uptime for profile edits.
+- **Negative**: Profile data is not portable across identity providers without a migration. If we ever adopt social login providers that pre-populate name/picture, we will need to write a one-way sync from Auth0 → our DB at first-login time.
+- **Neutral**: The `display_name_lower` partial unique index, the `needs_display_name_setup` flag, and the new `GET /users/check-displayname` + `POST /users/me/avatar` endpoints (originally introduced in ADR-007) are all retained — they remain valuable independent of the Auth0-master question.

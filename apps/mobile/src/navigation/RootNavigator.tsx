@@ -14,8 +14,9 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
- * Inner component rendered only when the user is authenticated.
- * Isolates hook calls that must only run in the authenticated context.
+ * Inner component rendered only when the user is authenticated and does NOT
+ * need display-name setup. Isolates hook calls that must only run in the
+ * authenticated, fully-onboarded context.
  */
 function AuthenticatedRoot({
   navigationRef,
@@ -27,8 +28,12 @@ function AuthenticatedRoot({
 }
 
 export default function RootNavigator(): React.JSX.Element {
-  const { isAuthenticated, token } = useAuthStore();
+  const { isAuthenticated, token, user } = useAuthStore();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
+  // True when the backend has flagged the user as needing to pick a unique
+  // display name before they can use the app (email-prefix name detected).
+  const needsSetup = isAuthenticated && user?.needsDisplayNameSetup === true;
 
   useEffect(() => {
     if (isAuthenticated && token && token !== 'dev-token') {
@@ -72,12 +77,19 @@ export default function RootNavigator(): React.JSX.Element {
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
+        {isAuthenticated && !needsSetup ? (
+          // Fully onboarded — show the main app
           <Stack.Screen name="Main">
             {() => <AuthenticatedRoot navigationRef={navigationRef} />}
           </Stack.Screen>
         ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
+          // Unauthenticated OR authenticated but display name setup required.
+          // AuthNavigator starts at Login by default; ProfileSetupScreen is the
+          // forced entry point when needsSetup is true (handled inside AuthNavigator
+          // via the initialRouteName prop passed below).
+          <Stack.Screen name="Auth">
+            {() => <AuthNavigator initialRoute={needsSetup ? 'ProfileSetup' : 'Login'} />}
+          </Stack.Screen>
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -11,6 +11,9 @@ export interface User {
   inviteCodeUsedId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** True when the backend has detected the user's displayName looks like an email prefix
+   *  and requires them to choose a unique display name before accessing the app. */
+  needsDisplayNameSetup?: boolean;
 }
 
 export interface PublicUser {
