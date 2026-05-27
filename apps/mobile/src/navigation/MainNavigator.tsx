@@ -19,7 +19,6 @@ import ChatHeaderTitle from './ChatHeaderTitle';
 import BrowseScreen from '../screens/browse/BrowseScreen';
 import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
 import PostListingScreen from '../screens/sell/PostListingScreen';
-import LocationPickerScreen from '../screens/sell/LocationPickerScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ConversationListScreen from '../screens/chat/ConversationListScreen';
@@ -92,7 +91,6 @@ function SellNavigator() {
   return (
     <SellStack.Navigator>
       <SellStack.Screen name="PostListing" component={PostListingScreen} options={{ title: 'New Listing' }} />
-      <SellStack.Screen name="LocationPicker" component={LocationPickerScreen} options={{ title: 'Pick Location' }} />
     </SellStack.Navigator>
   );
 }

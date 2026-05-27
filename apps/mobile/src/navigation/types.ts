@@ -43,15 +43,7 @@ export type MessagesStackParamList = {
 
 // Sell Stack
 export type SellStackParamList = {
-  PostListing:
-    | {
-        listingId?: string;
-        pickedLatitude?: number;
-        pickedLongitude?: number;
-        pickedAddress?: string;
-      }
-    | undefined;
-  LocationPicker: { latitude: number; longitude: number };
+  PostListing: { listingId?: string } | undefined;
 };
 
 // Profile Stack

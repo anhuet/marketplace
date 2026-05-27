@@ -256,17 +256,6 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     captureLocation();
   }, [captureLocation, isEditMode]);
 
-  // ── Handle returned location from LocationPicker ────────────────────────
-
-  useEffect(() => {
-    const params = route?.params;
-    if (params?.pickedLatitude != null && params?.pickedLongitude != null) {
-      setGps({ latitude: params.pickedLatitude, longitude: params.pickedLongitude });
-      setLocationAddress(params.pickedAddress ?? null);
-      setGpsError(null);
-    }
-  }, [route?.params?.pickedLatitude, route?.params?.pickedLongitude, route?.params?.pickedAddress]);
-
   // ── Reverse geocode initial GPS location ────────────────────────────────
 
   useEffect(() => {
@@ -538,11 +527,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
   const [voiceProcessing, setVoiceProcessing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [voiceTranscript, setVoiceTranscript] = useState<string | null>(null);
 
   const startVoiceRecording = async () => {
     setVoiceError(null);
-    setVoiceTranscript(null);
     try {
       const perm = await requestRecordingPermissionsAsync();
       if (!perm.granted) {
@@ -594,8 +581,6 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
       const res = await api.parseVoiceListing(formData);
       const parsed = res.data;
-
-      setVoiceTranscript(parsed.transcript);
 
       if (parsed.title) setValue('title', parsed.title, { shouldValidate: true });
       if (parsed.description) setValue('description', parsed.description, { shouldValidate: true });
@@ -876,17 +861,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
                     </Text>
                   </>
                 ) : (
-                  <>
-                    <Text style={styles.voiceIcon}>🎤</Text>
-                    <Text style={styles.voiceButtonText}>Tap to describe by voice</Text>
-                  </>
+                  <Text style={styles.voiceButtonText}>Tap to describe by voice</Text>
                 )}
               </TouchableOpacity>
-              {voiceTranscript ? (
-                <Text style={styles.voiceTranscript} numberOfLines={3}>
-                  “{voiceTranscript}”
-                </Text>
-              ) : null}
               {voiceError ? (
                 <Text
                   style={styles.fieldError}
@@ -1045,72 +1022,35 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
               <Text style={styles.locationLoadingText}>Getting your location...</Text>
             </View>
           ) : gps ? (
-            isEditMode ? (
-              <View
-                style={styles.mapPreviewContainer}
-                accessibilityRole="image"
-                accessibilityLabel="Listing location (read-only)"
+            <View
+              style={styles.mapPreviewContainer}
+              accessibilityRole="image"
+              accessibilityLabel="Listing location (read-only)"
+            >
+              <MapView
+                style={styles.mapPreview}
+                region={{
+                  latitude: gps.latitude,
+                  longitude: gps.longitude,
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.005,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+                pointerEvents="none"
               >
-                <MapView
-                  style={styles.mapPreview}
-                  region={{
-                    latitude: gps.latitude,
-                    longitude: gps.longitude,
-                    latitudeDelta: 0.005,
-                    longitudeDelta: 0.005,
-                  }}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                  rotateEnabled={false}
-                  pitchEnabled={false}
-                  pointerEvents="none"
-                >
-                  <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
-                </MapView>
-                <View style={styles.mapOverlayRow}>
-                  <View style={styles.mapAddressContainer}>
-                    <Text style={styles.mapAddressText} numberOfLines={1}>
-                      {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
-                    </Text>
-                  </View>
+                <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
+              </MapView>
+              <View style={styles.mapOverlayRow}>
+                <View style={styles.mapAddressContainer}>
+                  <Text style={styles.mapAddressText} numberOfLines={1}>
+                    {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                  </Text>
                 </View>
               </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.mapPreviewContainer}
-                onPress={() => navigation.navigate('LocationPicker', { latitude: gps.latitude, longitude: gps.longitude })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Change location on map"
-              >
-                <MapView
-                  style={styles.mapPreview}
-                  region={{
-                    latitude: gps.latitude,
-                    longitude: gps.longitude,
-                    latitudeDelta: 0.005,
-                    longitudeDelta: 0.005,
-                  }}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                  rotateEnabled={false}
-                  pitchEnabled={false}
-                  pointerEvents="none"
-                >
-                  <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
-                </MapView>
-                <View style={styles.mapOverlayRow}>
-                  <View style={styles.mapAddressContainer}>
-                    <Text style={styles.mapAddressText} numberOfLines={1}>
-                      {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
-                    </Text>
-                  </View>
-                  <View style={styles.changeLocationBadge}>
-                    <Text style={styles.changeLocationText}>Change</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )
+            </View>
           ) : (
             <View style={styles.locationRow}>
               <View style={styles.locationInfo}>
@@ -1376,17 +1316,6 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.textPrimary,
   },
-  changeLocationBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryDark,
-  },
-  changeLocationText: {
-    ...typography.label,
-    color: colors.surface,
-    fontWeight: '600',
-  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1443,9 +1372,6 @@ const styles = StyleSheet.create({
   voiceButtonDisabled: {
     opacity: 0.7,
   },
-  voiceIcon: {
-    fontSize: 18,
-  },
   voiceButtonText: {
     ...typography.label,
     color: colors.surface,
@@ -1456,12 +1382,6 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.surface,
-  },
-  voiceTranscript: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    marginTop: spacing.sm,
   },
 
   // Submit
