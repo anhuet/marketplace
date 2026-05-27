@@ -12,6 +12,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
 import { api, usersApi } from '../../lib/api';
@@ -29,7 +30,8 @@ type AvailabilityState = 'idle' | 'checking' | 'available' | 'unavailable';
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProfileSetupScreen({ navigation: _navigation }: Props): React.JSX.Element {
-  const [displayName, setDisplayName] = useState('');
+  const { user, updateUser } = useAuthStore();
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,8 +39,6 @@ export default function ProfileSetupScreen({ navigation: _navigation }: Props): 
   const [availabilityMessage, setAvailabilityMessage] = useState('');
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const { updateUser } = useAuthStore();
 
   // ── Avatar picker ────────────────────────────────────────────────────────
 
@@ -50,7 +50,16 @@ export default function ProfileSetupScreen({ navigation: _navigation }: Props): 
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setAvatarUri(result.assets[0].uri);
+      try {
+        const manipulated = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 512, height: 512 } }],
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+        );
+        setAvatarUri(manipulated.uri);
+      } catch {
+        setAvatarUri(result.assets[0].uri);
+      }
     }
   };
 
@@ -99,6 +108,9 @@ export default function ProfileSetupScreen({ navigation: _navigation }: Props): 
   }, []);
 
   useEffect(() => {
+    if (user?.displayName) {
+      checkAvailability(user.displayName);
+    }
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import axios from 'axios';
 
 import { api, usersApi } from '../../lib/api';
@@ -60,6 +61,19 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
 
   // ── Avatar picker ────────────────────────────────────────────────────────
 
+  const compressAvatar = async (uri: string): Promise<string> => {
+    try {
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 512, height: 512 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      return manipulated.uri;
+    } catch {
+      return uri;
+    }
+  };
+
   const requestMediaPermission = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -88,7 +102,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
       quality: 0.8,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setAvatarUri(result.assets[0].uri);
+      setAvatarUri(await compressAvatar(result.assets[0].uri));
     }
   };
 
@@ -102,7 +116,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
       quality: 0.8,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setAvatarUri(result.assets[0].uri);
+      setAvatarUri(await compressAvatar(result.assets[0].uri));
     }
   };
 

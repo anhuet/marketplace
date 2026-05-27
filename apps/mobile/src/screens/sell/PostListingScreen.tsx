@@ -368,8 +368,17 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     asset: ImagePicker.ImagePickerAsset,
     indexInBatch: number,
   ): Promise<LocalPhoto> => {
-    const manipulated = await ImageManipulator.manipulateAsync(asset.uri, [], {
-      compress: 0.8,
+    const MAX_DIM = 1600;
+    const actions: ImageManipulator.Action[] = [];
+    if (asset.width && asset.height) {
+      if (asset.width >= asset.height && asset.width > MAX_DIM) {
+        actions.push({ resize: { width: MAX_DIM } });
+      } else if (asset.height > asset.width && asset.height > MAX_DIM) {
+        actions.push({ resize: { height: MAX_DIM } });
+      }
+    }
+    const manipulated = await ImageManipulator.manipulateAsync(asset.uri, actions, {
+      compress: 0.7,
       format: ImageManipulator.SaveFormat.JPEG,
     });
     return {
