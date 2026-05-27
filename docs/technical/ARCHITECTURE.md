@@ -226,6 +226,13 @@ Named API groups (`authApi`, `invitesApi`, `listingsApi`, `conversationsApi`, `r
 |-----------|------|-------------|
 | `InviteCodeInput` | `src/components/InviteCodeInput.tsx` | Renders a fixed `MKT-` prefix label alongside an editable region that auto-uppercases, strips non-alphanumeric chars, and auto-inserts a dash after the 4th character. Internal state holds the 9-char body (`XXXX-XXXX`); the `onChangeValue` callback always returns the full `MKT-XXXX-XXXX` wire format ready for the API. |
 
+### Image Preprocessing
+
+All user-supplied images are preprocessed client-side via `expo-image-manipulator` before upload:
+
+- **Listing photos** (`PostListingScreen`): resized so the longest edge ≤ 1600 px (aspect ratio preserved), then JPEG-encoded at quality 0.7. Handles HEIC from iPhone gallery.
+- **Avatars** (`ProfileSetupScreen`, `EditProfileScreen`): resized to 512 × 512 px and JPEG-encoded at quality 0.8. Safe because `allowsEditing: true` + `aspect: [1, 1]` guarantees a square crop before manipulator runs.
+
 ### Real-Time (Socket.io)
 
 `src/lib/socket.ts` manages a singleton Socket.io connection:

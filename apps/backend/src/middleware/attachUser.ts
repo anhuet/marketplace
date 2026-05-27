@@ -10,10 +10,10 @@ declare module 'express-serve-static-core' {
 }
 
 /**
- * Fetch user profile from Auth0 /userinfo endpoint using the access token.
- * Returns email and name when they are not present in the JWT claims.
+ * Fetch the email claim from Auth0 /userinfo endpoint using the access token.
+ * Needed because Auth0 access tokens often omit `email` from JWT claims.
  */
-async function fetchAuth0UserInfo(accessToken: string): Promise<{ email: string; name: string }> {
+async function fetchAuth0UserEmail(accessToken: string): Promise<string> {
   const domain = process.env.AUTH0_DOMAIN ?? '';
   return new Promise((resolve) => {
     const options = {
@@ -28,13 +28,13 @@ async function fetchAuth0UserInfo(accessToken: string): Promise<{ email: string;
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve({ email: parsed.email ?? '', name: parsed.name ?? parsed.nickname ?? '' });
+          resolve(parsed.email ?? '');
         } catch {
-          resolve({ email: '', name: '' });
+          resolve('');
         }
       });
     });
-    req.on('error', () => resolve({ email: '', name: '' }));
+    req.on('error', () => resolve(''));
     req.end();
   });
 }
@@ -56,17 +56,14 @@ export async function attachUser(req: Request, res: Response, next: NextFunction
 
     const auth0Id = req.auth.sub;
     let email = typeof req.auth['email'] === 'string' ? req.auth['email'] : '';
-    let name = typeof req.auth['name'] === 'string' ? req.auth['name'] : '';
 
     // Auth0 access tokens often omit email — fetch from /userinfo if needed
     if (!email) {
       const rawToken = req.headers.authorization?.replace('Bearer ', '') ?? '';
-      const userInfo = await fetchAuth0UserInfo(rawToken);
-      email = userInfo.email;
-      name = userInfo.name;
+      email = await fetchAuth0UserEmail(rawToken);
     }
 
-    const user = await findOrCreateUser(auth0Id, email, name || undefined);
+    const user = await findOrCreateUser(auth0Id, email);
     req.dbUser = user;
     next();
   } catch (err) {
