@@ -19,6 +19,7 @@ import ChatHeaderTitle from './ChatHeaderTitle';
 import BrowseScreen from '../screens/browse/BrowseScreen';
 import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
 import PostListingScreen from '../screens/sell/PostListingScreen';
+import CameraCaptureScreen from '../screens/sell/CameraCaptureScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ConversationListScreen from '../screens/chat/ConversationListScreen';
@@ -91,6 +92,15 @@ function SellNavigator() {
   return (
     <SellStack.Navigator>
       <SellStack.Screen name="PostListing" component={PostListingScreen} options={{ title: 'New Listing' }} />
+      <SellStack.Screen
+        name="CameraCapture"
+        component={CameraCaptureScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
     </SellStack.Navigator>
   );
 }

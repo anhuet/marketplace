@@ -1,6 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
+import type { LocalPhoto } from '../lib/imagePipeline';
 
 // Auth Stack
 export type AuthStackParamList = {
@@ -44,6 +45,16 @@ export type MessagesStackParamList = {
 // Sell Stack
 export type SellStackParamList = {
   PostListing: { listingId?: string } | undefined;
+  /**
+   * Full-screen in-app camera for capturing multiple listing photos in one
+   * session.  `remaining` caps the number of shots the user can take;
+   * `onCapture` is called with the resulting array of LocalPhotos when the user
+   * taps Done or navigates back.
+   */
+  CameraCapture: {
+    remaining: number;
+    onCapture: (photos: LocalPhoto[]) => void;
+  };
 };
 
 // Profile Stack

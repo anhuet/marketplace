@@ -162,7 +162,7 @@ Full token reference, component specs, and interaction patterns: [`docs/content/
 
 ## Mobile Architecture
 
-> Owner: @react-native-developer — Last updated: 2026-03-30
+> Owner: @react-native-developer — Last updated: 2026-05-27
 
 ### Directory Structure
 
@@ -172,6 +172,7 @@ apps/mobile/
   src/
     lib/
       api.ts                       # Axios instance + typed API functions (authApi, listingsApi, conversationsApi, …)
+      imagePipeline.ts             # Shared image-preprocessing helper — resize ≤ 1600 px, JPEG quality 0.7; exports LocalPhoto type
       socket.ts                    # Socket.io client — connect/disconnect/join helpers
     navigation/
       types.ts                     # All typed param lists (AuthStack, BrowseStack, SearchStack, SellStack, ProfileStack, MainTabs, RootStack)
@@ -184,7 +185,7 @@ apps/mobile/
       chat/                        # ChatThreadScreen, ConversationListScreen
       profile/                     # ProfileScreen, EditProfileScreen, SettingsScreen, UserProfileScreen
       search/                      # SearchScreen
-      sell/                        # PostListingScreen
+      sell/                        # PostListingScreen, CameraCaptureScreen
     store/
       authStore.ts                 # Zustand store — user, token, isAuthenticated; persisted via AsyncStorage
       chatStore.ts                 # Zustand store — conversations, messages, unreadCount
@@ -242,7 +243,7 @@ The feature is hidden in edit mode to avoid overwriting an existing listing's co
 
 All user-supplied images are preprocessed client-side via `expo-image-manipulator` before upload:
 
-- **Listing photos** (`PostListingScreen`): resized so the longest edge ≤ 1600 px (aspect ratio preserved), then JPEG-encoded at quality 0.7. Handles HEIC from iPhone gallery.
+- **Listing photos** (`PostListingScreen`, `CameraCaptureScreen`): resized so the longest edge ≤ 1600 px (aspect ratio preserved), then JPEG-encoded at quality 0.7. Handles HEIC from iPhone gallery. Both the gallery-picker path and the in-app camera path share the same `toJpegLocalPhoto` helper in `src/lib/imagePipeline.ts`.
 - **Avatars** (`ProfileSetupScreen`, `EditProfileScreen`): resized to 512 × 512 px and JPEG-encoded at quality 0.8. Safe because `allowsEditing: true` + `aspect: [1, 1]` guarantees a square crop before manipulator runs.
 
 ### Real-Time (Socket.io)
@@ -275,6 +276,7 @@ All user-supplied images are preprocessed client-side via `expo-image-manipulato
 | `expo-notifications` | ~0.28.0 | Expo push token registration and foreground notification handling |
 | `expo-image-picker` | ~15.0.0 | Camera roll / camera access for listing photos |
 | `expo-audio` | ~1.1.0 | Microphone recording for the Voice-Fill feature on PostListingScreen — output is uploaded to `POST /listings/voice-parse` |
+| `expo-camera` | ~17.0.0 | In-app multi-shot camera for listing photos (`CameraCaptureScreen`) — replaces the single-shot `ImagePicker.launchCameraAsync` path |
 | `react-native-gesture-handler` | ~2.16.0 | Required peer for React Navigation; wraps app root |
 | `react-native-safe-area-context` | 4.10.1 | Safe area insets for notch/home-indicator handling |
 

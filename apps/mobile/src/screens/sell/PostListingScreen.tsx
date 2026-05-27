@@ -18,7 +18,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import {
   useAudioRecorder,
@@ -31,6 +30,7 @@ import MapView, { Marker } from 'react-native-maps';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { api } from '../../lib/api';
+import { toJpegLocalPhoto, type LocalPhoto } from '../../lib/imagePipeline';
 import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import FormInput from '../../components/FormInput';
@@ -48,14 +48,6 @@ interface RemotePhoto {
   kind: 'remote';
   id: string;
   uri: string; // presigned URL — used for display only
-}
-
-/** A photo that was just picked from the device and has not been uploaded yet. */
-interface LocalPhoto {
-  kind: 'local';
-  uri: string;
-  type: string;
-  fileName: string;
 }
 
 type EditablePhoto = RemotePhoto | LocalPhoto;
@@ -348,42 +340,20 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     return true;
   };
 
-  const requestCameraPermission = async (): Promise<boolean> => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please allow camera access in Settings.');
-      return false;
-    }
-    return true;
-  };
-
-  // Re-encode every picked asset to JPEG. iPhone gallery returns HEIC by default,
-  // which sharp on the backend (built without libheif) cannot decode — so we
-  // normalise to JPEG client-side before upload.
-  const toJpeg = async (
+  // Re-encode every picked asset to JPEG via the shared pipeline in
+  // lib/imagePipeline.  iPhone gallery returns HEIC by default, which sharp on
+  // the backend (built without libheif) cannot decode — we normalise to JPEG
+  // client-side.  The pipeline also caps the longest edge at 1 600 px.
+  const toJpeg = (
     asset: ImagePicker.ImagePickerAsset,
     indexInBatch: number,
-  ): Promise<LocalPhoto> => {
-    const MAX_DIM = 1600;
-    const actions: ImageManipulator.Action[] = [];
-    if (asset.width && asset.height) {
-      if (asset.width >= asset.height && asset.width > MAX_DIM) {
-        actions.push({ resize: { width: MAX_DIM } });
-      } else if (asset.height > asset.width && asset.height > MAX_DIM) {
-        actions.push({ resize: { height: MAX_DIM } });
-      }
-    }
-    const manipulated = await ImageManipulator.manipulateAsync(asset.uri, actions, {
-      compress: 0.7,
-      format: ImageManipulator.SaveFormat.JPEG,
+  ): Promise<LocalPhoto> =>
+    toJpegLocalPhoto({
+      uri: asset.uri,
+      width: asset.width ?? undefined,
+      height: asset.height ?? undefined,
+      indexInBatch,
     });
-    return {
-      kind: 'local',
-      uri: manipulated.uri,
-      type: 'image/jpeg',
-      fileName: `photo-${Date.now()}-${indexInBatch}.jpg`,
-    };
-  };
 
   /**
    * In edit mode, immediately upload the local photos to the server and
@@ -449,27 +419,22 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     }
   };
 
-  const pickFromCamera = async () => {
+  const pickFromCamera = () => {
     if (photos.length >= MAX_PHOTOS) {
       Alert.alert('Photo Limit', `You can only add up to ${MAX_PHOTOS} photos.`);
       return;
     }
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) return;
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
+    // Permission is handled inside CameraCaptureScreen via useCameraPermissions().
+    // The screen calls onCapture with the array of LocalPhotos when the user
+    // taps Done or navigates back.
+    navigation.navigate('CameraCapture', {
+      remaining: MAX_PHOTOS - photos.length,
+      onCapture: (locals: LocalPhoto[]) => {
+        if (locals.length > 0) {
+          void appendPhotos(locals);
+        }
+      },
     });
-
-    if (!result.canceled && result.assets.length > 0) {
-      try {
-        const local = await toJpeg(result.assets[0], 0);
-        await appendPhotos([local]);
-      } catch {
-        setPhotosError('Could not process the captured photo. Please try again.');
-      }
-    }
   };
 
   const showPhotoOptions = () => {
