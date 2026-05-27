@@ -51,6 +51,12 @@
           "microphonePermission": "Allow Marketplace to use your microphone so you can describe listings by voice."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Marketplace to use your camera to take listing photos."
+        }
+      ],
       "./plugins/allow-http.js",
       "expo-web-browser"
     ],

@@ -1873,7 +1873,7 @@ PODS:
     - SocketRocket
   - react-native-maps (1.20.1):
     - React-Core
-  - react-native-safe-area-context (5.6.2):
+  - react-native-safe-area-context (5.8.0):
     - React-Core
   - React-NativeModulesApple (0.81.5):
     - boost
@@ -2382,7 +2382,7 @@ PODS:
     - SocketRocket
   - RNCAsyncStorage (2.2.0):
     - React-Core
-  - RNGestureHandler (2.28.0):
+  - RNGestureHandler (2.31.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -2410,7 +2410,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNScreens (4.16.0):
+  - RNScreens (4.24.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -2861,7 +2861,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 94f4264de2cb156960cd82b338a403f4653f2fd9
   React-microtasksnativemodule: 6c4ee39a36958c39c97b074d28f360246a335e84
   react-native-maps: 9febd31278b35cd21e4fad2cf6fa708993be5dab
-  react-native-safe-area-context: 6c8805194166a9d6b3e53ba69ca76756c9bfb052
+  react-native-safe-area-context: 700f3e707470d3cef056231541c77df29a5f0d9e
   React-NativeModulesApple: ebf2ce72b35870036900d6498b33724386540a71
   React-oscompat: eb0626e8ba1a2c61673c991bf9dc21834898475d
   React-perflogger: 509e1f9a3ee28df71b0a66de806ac515ce951246
@@ -2893,8 +2893,8 @@ SPEC CHECKSUMS:
   ReactCodegen: 0c47bcad3576258ef1a91e2ec1fd43afae72e85f
   ReactCommon: 5f0e5c09a64a2717215dd84380e1a747810406f2
   RNCAsyncStorage: b44e8a4e798c3e1f56bffccd0f591f674fb9198f
-  RNGestureHandler: 12a436b5074378be95468a57b62c165a1e24cfc9
-  RNScreens: 35525ebfe219c8709da0d26aebbc9a5e02e1077b
+  RNGestureHandler: 5c7118e8aea208dcb3a815ee5fe610b8e7655a12
+  RNScreens: 7b22241a88a0cf57199389f8cf8053b9f3c735ba
   RNVectorIcons: 9084b0cf37b3c5690b730c5627a21d750c9f517e
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   SDWebImageAVIFCoder: afe194a084e851f70228e4be35ef651df0fc5c57
