@@ -20,6 +20,13 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import MapView, { Marker } from 'react-native-maps';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -521,6 +528,108 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     }
   };
 
+  // ── Voice fill (Whisper + GPT) ────────────────────────────────────────────
+  // Records audio, sends to backend, fills form fields from the parsed result.
+  // Available in create mode only — we don't want to overwrite an existing
+  // listing's fields with new transcription output.
+
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder, 250);
+
+  const [voiceProcessing, setVoiceProcessing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceTranscript, setVoiceTranscript] = useState<string | null>(null);
+
+  const startVoiceRecording = async () => {
+    setVoiceError(null);
+    setVoiceTranscript(null);
+    try {
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        setVoiceError('Microphone permission is required. Please enable it in Settings.');
+        return;
+      }
+      // Configure audio session so recording works on iOS even with mute switch on.
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+    } catch {
+      setVoiceError('Could not start the recording. Please try again.');
+    }
+  };
+
+  const stopVoiceRecordingAndParse = async () => {
+    try {
+      await audioRecorder.stop();
+    } catch {
+      setVoiceError('Could not stop the recording. Please try again.');
+      return;
+    }
+
+    const uri = audioRecorder.uri;
+    if (!uri) {
+      setVoiceError('No recording captured. Please try again.');
+      return;
+    }
+
+    setVoiceProcessing(true);
+    setVoiceError(null);
+
+    try {
+      // The file extension on iOS is .m4a (AAC). Some recorders return MIME
+      // type video/mp4 for m4a — the backend accepts both audio/* and video/*.
+      const isM4a = uri.toLowerCase().endsWith('.m4a');
+      const filename = isM4a ? 'voice.m4a' : 'voice.mp4';
+      const mime = isM4a ? 'audio/m4a' : 'audio/mp4';
+
+      const formData = new FormData();
+      formData.append('audio', {
+        uri,
+        name: filename,
+        type: mime,
+      } as unknown as Blob);
+
+      const res = await api.parseVoiceListing(formData);
+      const parsed = res.data;
+
+      setVoiceTranscript(parsed.transcript);
+
+      if (parsed.title) setValue('title', parsed.title, { shouldValidate: true });
+      if (parsed.description) setValue('description', parsed.description, { shouldValidate: true });
+      if (parsed.price) setValue('price', parsed.price, { shouldValidate: true });
+      if (parsed.condition) setValue('condition', parsed.condition, { shouldValidate: true });
+
+      // Match the API-supplied category id against the loaded category options.
+      if (parsed.categoryId) {
+        const opts = apiCategories.length > 0 ? apiCategories : null;
+        const match = opts?.find((c) => c.id === parsed.categoryId);
+        if (match) {
+          setValue('categoryId', match.id, { shouldValidate: true });
+        }
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setVoiceError(
+        axiosErr?.response?.data?.error?.message ??
+          'Voice parsing failed. Please try again or fill the fields manually.',
+      );
+    } finally {
+      setVoiceProcessing(false);
+    }
+  };
+
+  const handleVoiceButtonPress = () => {
+    if (voiceProcessing) return;
+    if (recorderState.isRecording) {
+      stopVoiceRecordingAndParse();
+    } else {
+      startVoiceRecording();
+    }
+  };
+
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const onSubmit = async (values: ListingFormValues) => {
@@ -729,6 +838,65 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
             >
               {photosError}
             </Text>
+          ) : null}
+
+          {/* ── Voice Fill (create mode only) ── */}
+          {!isEditMode ? (
+            <View style={styles.voiceContainer}>
+              <Text style={styles.sectionLabel}>VOICE FILL</Text>
+              <Text style={styles.voiceHint}>
+                Describe your item in English or German — title, price and category will be filled in automatically.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.voiceButton,
+                  recorderState.isRecording && styles.voiceButtonRecording,
+                  voiceProcessing && styles.voiceButtonDisabled,
+                ]}
+                onPress={handleVoiceButtonPress}
+                disabled={voiceProcessing}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  recorderState.isRecording
+                    ? 'Stop recording and fill listing fields'
+                    : 'Start voice recording to fill listing fields'
+                }
+                accessibilityState={{ disabled: voiceProcessing, busy: voiceProcessing }}
+              >
+                {voiceProcessing ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.surface} />
+                    <Text style={styles.voiceButtonText}>Transcribing…</Text>
+                  </>
+                ) : recorderState.isRecording ? (
+                  <>
+                    <View style={styles.voiceRecordingDot} />
+                    <Text style={styles.voiceButtonText}>
+                      {`Stop  ·  ${Math.floor((recorderState.durationMillis ?? 0) / 1000)}s`}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.voiceIcon}>🎤</Text>
+                    <Text style={styles.voiceButtonText}>Tap to describe by voice</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {voiceTranscript ? (
+                <Text style={styles.voiceTranscript} numberOfLines={3}>
+                  “{voiceTranscript}”
+                </Text>
+              ) : null}
+              {voiceError ? (
+                <Text
+                  style={styles.fieldError}
+                  accessibilityLiveRegion="polite"
+                  accessibilityRole="alert"
+                >
+                  {voiceError}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
 
           {/* ── Title ── */}
@@ -1248,6 +1416,52 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.surface,
     fontWeight: '600',
+  },
+
+  // Voice fill
+  voiceContainer: {
+    marginBottom: spacing.base,
+  },
+  voiceHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  voiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryDark,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
+    borderRadius: radius.pill,
+  },
+  voiceButtonRecording: {
+    backgroundColor: colors.error,
+  },
+  voiceButtonDisabled: {
+    opacity: 0.7,
+  },
+  voiceIcon: {
+    fontSize: 18,
+  },
+  voiceButtonText: {
+    ...typography.label,
+    color: colors.surface,
+    fontWeight: '600',
+  },
+  voiceRecordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.surface,
+  },
+  voiceTranscript: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
   },
 
   // Submit

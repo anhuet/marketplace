@@ -52,7 +52,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your location</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Allow $(PRODUCT_NAME) to access your microphone</string>
+	<string>Allow Marketplace to use your microphone so you can describe listings by voice.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow Marketplace to access your photos to upload listing images.</string>
 	<key>RCTNewArchEnabled</key>

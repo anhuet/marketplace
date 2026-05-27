@@ -34,6 +34,7 @@ Marketplace is a mobile-first peer-to-peer marketplace application. Users discov
 - **Auth0** -- identity provider for user authentication (OAuth2 / JWT)
 - **Expo Push Notifications** -- delivers push notifications to mobile devices
 - **AWS S3** -- image storage for listing photos and avatars
+- **OpenAI** -- Whisper (audio transcription) and GPT-4o-mini (structured field extraction) for the Voice-Fill feature on the New Listing screen. Accessed only from the backend (`POST /api/v1/listings/voice-parse`) so the API key never ships in the mobile bundle. Supports English and German speech.
 
 ---
 
@@ -226,6 +227,17 @@ Named API groups (`authApi`, `invitesApi`, `listingsApi`, `conversationsApi`, `r
 |-----------|------|-------------|
 | `InviteCodeInput` | `src/components/InviteCodeInput.tsx` | Renders a fixed `MKT-` prefix label alongside an editable region that auto-uppercases, strips non-alphanumeric chars, and auto-inserts a dash after the 4th character. Internal state holds the 9-char body (`XXXX-XXXX`); the `onChangeValue` callback always returns the full `MKT-XXXX-XXXX` wire format ready for the API. |
 
+### Voice Fill (PostListingScreen)
+
+In create mode only, sellers can tap a microphone button to describe an item in English or German. The flow:
+
+1. `expo-audio` `useAudioRecorder(RecordingPresets.HIGH_QUALITY)` records to a local m4a file after `requestRecordingPermissionsAsync()` grants microphone access.
+2. On stop, the file URI is uploaded as `multipart/form-data` (field `audio`) to `POST /api/v1/listings/voice-parse`.
+3. The backend pipes the audio through OpenAI Whisper for transcription, then through GPT-4o-mini with a structured-JSON system prompt that emits `{ title, description, price, categoryId, condition }` constrained to the existing category list and `Condition` enum.
+4. Successful responses populate the React Hook Form fields via `setValue()`; the user can edit anything before submitting. Nullable fields (e.g. price not mentioned) are left untouched.
+
+The feature is hidden in edit mode to avoid overwriting an existing listing's content. The OpenAI API key lives only on the backend; mobile never holds it.
+
 ### Image Preprocessing
 
 All user-supplied images are preprocessed client-side via `expo-image-manipulator` before upload:
@@ -262,6 +274,7 @@ All user-supplied images are preprocessed client-side via `expo-image-manipulato
 | `expo-location` | ~17.0.0 | GPS coordinates for listing creation and browse feed |
 | `expo-notifications` | ~0.28.0 | Expo push token registration and foreground notification handling |
 | `expo-image-picker` | ~15.0.0 | Camera roll / camera access for listing photos |
+| `expo-audio` | ~1.1.0 | Microphone recording for the Voice-Fill feature on PostListingScreen — output is uploaded to `POST /listings/voice-parse` |
 | `react-native-gesture-handler` | ~2.16.0 | Required peer for React Navigation; wraps app root |
 | `react-native-safe-area-context` | 4.10.1 | Safe area insets for notch/home-indicator handling |
 

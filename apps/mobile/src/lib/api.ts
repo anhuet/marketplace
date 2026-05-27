@@ -74,6 +74,20 @@ export const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,
     }),
+  parseVoiceListing: (data: FormData) =>
+    apiClient.post<{
+      transcript: string;
+      detectedLanguage: string;
+      title: string;
+      description: string;
+      price: string | null;
+      categoryId: string | null;
+      categorySlug: string | null;
+      condition: 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'POOR' | null;
+    }>('/listings/voice-parse', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }),
   updateListing: (
     id: string,
     data: { title: string; description: string; price: string; condition: string; categoryId: string },

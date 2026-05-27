@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import axios from 'axios';
@@ -224,7 +225,9 @@ export default function ProfileSetupScreen({ navigation: _navigation }: Props): 
             ) : (
               <View style={styles.avatarPlaceholder} />
             )}
-            <View style={styles.cameraBadge} />
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={16} color={colors.surface} />
+            </View>
           </TouchableOpacity>
 
           {/* Display name field with availability indicator */}
@@ -327,6 +330,10 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: radius.full,
     backgroundColor: colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   inputWrapper: {
     width: '100%',

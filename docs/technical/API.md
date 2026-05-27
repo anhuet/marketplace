@@ -417,6 +417,39 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 
 ---
 
+### POST /api/v1/listings/voice-parse
+
+**Auth required**: Yes
+**Description**: Accepts a short voice recording (English or German) describing a marketplace item and returns structured listing fields ready to pre-fill the New Listing form. Transcription is performed by OpenAI Whisper; field extraction is performed by GPT-4o-mini. Returns nullable fields when the speaker did not mention a particular attribute — never fails the request because the user forgot, e.g. the price.
+
+**Request**: `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `audio` | file | Yes | Audio recording (audio/* or video/m4a; max 25 MB — Whisper's hard limit). Recommended: 16 kHz mono m4a/mp4 from `expo-audio` `RecordingPresets.HIGH_QUALITY` |
+
+**Response 200**:
+```json
+{
+  "transcript": "string — raw transcription of the recording",
+  "detectedLanguage": "string — ISO 639-1 code (e.g. 'en', 'de')",
+  "title": "string — 3–100 chars, may be empty if extraction failed",
+  "description": "string — 10–1000 chars, may be empty if extraction failed",
+  "price": "string | null — decimal string (e.g. '2.00') or null if not mentioned",
+  "categoryId": "string | null — UUID of a matching category, or null if none clearly fits",
+  "categorySlug": "string | null — slug of the matching category",
+  "condition": "NEW | LIKE_NEW | GOOD | FAIR | POOR | null"
+}
+```
+
+**Error codes**:
+- `400` — No audio file provided / file exceeds 25 MB / non-audio MIME type / no speech detected in the recording (error code `VOICE_PARSE_EMPTY`)
+- `401` — Missing or invalid Auth0 Bearer token
+- `502` — Voice parsing service returned an invalid or empty response (error code `VOICE_PARSE_FAILED`)
+- `503` — `OPENAI_API_KEY` is not configured on the server (error code `VOICE_PARSE_UNAVAILABLE`)
+
+---
+
 ### GET /api/v1/listings/:id
 
 **Auth required**: No

@@ -14,6 +14,7 @@ import {
   addListingImagesHandler,
   deleteListingImageHandler,
 } from '../controllers/listingController';
+import { parseVoiceListingHandler } from '../controllers/voiceController';
 
 const router = Router();
 
@@ -34,9 +35,35 @@ const upload = multer({
 
 const uploadImages = upload.array('images', 8) as unknown as RequestHandler;
 
+// Multer for the voice-parse endpoint: single audio file, max 25 MB (Whisper limit).
+// Accept audio/* and video/* (some RN recorders report m4a as video/mp4).
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'));
+    }
+  },
+});
+
+const uploadAudio = audioUpload.single('audio') as unknown as RequestHandler;
+
 // Public routes — no auth required
 router.get('/seller/:sellerId', getSellerListingsHandler);
 router.get('/:id', getListingHandler);
+
+// Voice-fill — declared before /:id-prefixed authenticated routes for clarity
+router.post(
+  '/voice-parse',
+  requireAuth,
+  attachUser,
+  requireActiveUser,
+  uploadAudio,
+  parseVoiceListingHandler,
+);
 
 // Authenticated routes
 router.post('/', requireAuth, attachUser, requireActiveUser, uploadImages, createListingHandler);
