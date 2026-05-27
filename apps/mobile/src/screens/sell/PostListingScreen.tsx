@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -304,9 +304,19 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   // edit mode (which sets route.params.listingId), then taps the "+" Sell tab
   // directly, the screen refocuses with the old listingId still in params.
   // Resetting on focus when there is no listingId gives a clean blank form.
+  //
+  // The skipResetOnNextFocusRef flag suppresses the reset for one focus event
+  // after we navigate to CameraCapture, so photos captured there survive the
+  // refocus when the camera screen pops back.
+
+  const skipResetOnNextFocusRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
+      if (skipResetOnNextFocusRef.current) {
+        skipResetOnNextFocusRef.current = false;
+        return;
+      }
       if (!listingId) {
         reset({
           title: '',
@@ -427,6 +437,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     // Permission is handled inside CameraCaptureScreen via useCameraPermissions().
     // The screen calls onCapture with the array of LocalPhotos when the user
     // taps Done or navigates back.
+    skipResetOnNextFocusRef.current = true;
     navigation.navigate('CameraCapture', {
       remaining: MAX_PHOTOS - photos.length,
       onCapture: (locals: LocalPhoto[]) => {
