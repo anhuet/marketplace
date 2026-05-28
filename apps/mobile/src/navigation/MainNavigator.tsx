@@ -41,7 +41,7 @@ const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 function BrowseNavigator() {
   return (
-    <BrowseStack.Navigator>
+    <BrowseStack.Navigator screenOptions={{ headerLargeTitle: false }}>
       <BrowseStack.Screen name="Browse" component={BrowseScreen} options={{ headerShown: false }} />
       <BrowseStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
       <BrowseStack.Screen
@@ -69,7 +69,7 @@ function BrowseNavigator() {
 
 function MessagesNavigator() {
   return (
-    <MessagesStack.Navigator>
+    <MessagesStack.Navigator screenOptions={{ headerLargeTitle: false }}>
       <MessagesStack.Screen name="Messages" component={ConversationListScreen} options={{ title: 'Messages' }} />
       <MessagesStack.Screen
         name="ChatThread"
@@ -90,7 +90,7 @@ function MessagesNavigator() {
 
 function SellNavigator() {
   return (
-    <SellStack.Navigator>
+    <SellStack.Navigator screenOptions={{ headerLargeTitle: false }}>
       <SellStack.Screen name="PostListing" component={PostListingScreen} options={{ title: 'New Listing' }} />
       <SellStack.Screen
         name="CameraCapture"
@@ -107,7 +107,7 @@ function SellNavigator() {
 
 function SavedNavigator() {
   return (
-    <SavedStackNav.Navigator>
+    <SavedStackNav.Navigator screenOptions={{ headerLargeTitle: false }}>
       <SavedStackNav.Screen name="Saved" component={SavedScreen} options={{ headerShown: false }} />
       <SavedStackNav.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
       <SavedStackNav.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
@@ -117,7 +117,7 @@ function SavedNavigator() {
 
 function ProfileNavigator() {
   return (
-    <ProfileStack.Navigator>
+    <ProfileStack.Navigator screenOptions={{ headerLargeTitle: false }}>
       <ProfileStack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
       <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <ProfileStack.Screen name="ConversationList" component={ConversationListScreen} options={{ title: 'Messages' }} />
