@@ -14,7 +14,6 @@ import {
 } from './types';
 import { colors, spacing } from '../theme/tokens';
 import { useChatStore } from '../store/chatStore';
-import ChatHeaderTitle from './ChatHeaderTitle';
 
 import BrowseScreen from '../screens/browse/BrowseScreen';
 import ListingDetailScreen from '../screens/browse/ListingDetailScreen';
@@ -43,21 +42,21 @@ function BrowseNavigator() {
   return (
     <BrowseStack.Navigator screenOptions={{ headerLargeTitle: false }}>
       <BrowseStack.Screen name="Browse" component={BrowseScreen} options={{ headerShown: false }} />
-      <BrowseStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
+      <BrowseStack.Screen
+        name="ListingDetail"
+        component={ListingDetailScreen}
+        options={{ headerShown: false }}
+      />
       <BrowseStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
-        options={({ route }) => ({
-          headerTitle: () => (
-            <ChatHeaderTitle
-              otherUserName={route.params.otherUserName}
-              otherUserAvatarUrl={route.params.otherUserAvatarUrl}
-              listingTitle={route.params.listingTitle}
-            />
-          ),
-        })}
+        options={{ headerShown: false }}
       />
-      <BrowseStack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
+      <BrowseStack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ headerShown: false }}
+      />
       <BrowseStack.Screen
         name="WriteReview"
         component={WriteReviewScreen}
@@ -70,19 +69,15 @@ function BrowseNavigator() {
 function MessagesNavigator() {
   return (
     <MessagesStack.Navigator screenOptions={{ headerLargeTitle: false }}>
-      <MessagesStack.Screen name="Messages" component={ConversationListScreen} options={{ title: 'Messages' }} />
+      <MessagesStack.Screen
+        name="Messages"
+        component={ConversationListScreen}
+        options={{ title: 'Messages' }}
+      />
       <MessagesStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
-        options={({ route }) => ({
-          headerTitle: () => (
-            <ChatHeaderTitle
-              otherUserName={route.params.otherUserName}
-              otherUserAvatarUrl={route.params.otherUserAvatarUrl}
-              listingTitle={route.params.listingTitle}
-            />
-          ),
-        })}
+        options={{ headerShown: false }}
       />
     </MessagesStack.Navigator>
   );
@@ -91,7 +86,11 @@ function MessagesNavigator() {
 function SellNavigator() {
   return (
     <SellStack.Navigator screenOptions={{ headerLargeTitle: false }}>
-      <SellStack.Screen name="PostListing" component={PostListingScreen} options={{ title: 'New Listing' }} />
+      <SellStack.Screen
+        name="PostListing"
+        component={PostListingScreen}
+        options={{ title: 'New Listing' }}
+      />
       <SellStack.Screen
         name="CameraCapture"
         component={CameraCaptureScreen}
@@ -109,8 +108,16 @@ function SavedNavigator() {
   return (
     <SavedStackNav.Navigator screenOptions={{ headerLargeTitle: false }}>
       <SavedStackNav.Screen name="Saved" component={SavedScreen} options={{ headerShown: false }} />
-      <SavedStackNav.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
-      <SavedStackNav.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
+      <SavedStackNav.Screen
+        name="ListingDetail"
+        component={ListingDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <SavedStackNav.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ headerShown: false }}
+      />
     </SavedStackNav.Navigator>
   );
 }
@@ -118,26 +125,46 @@ function SavedNavigator() {
 function ProfileNavigator() {
   return (
     <ProfileStack.Navigator screenOptions={{ headerLargeTitle: false }}>
-      <ProfileStack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
-      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
-      <ProfileStack.Screen name="ConversationList" component={ConversationListScreen} options={{ title: 'Messages' }} />
+      <ProfileStack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Edit Profile' }}
+      />
+      <ProfileStack.Screen
+        name="ConversationList"
+        component={ConversationListScreen}
+        options={{ title: 'Messages' }}
+      />
       <ProfileStack.Screen
         name="ChatThread"
         component={ChatThreadScreen}
-        options={({ route }) => ({
-          headerTitle: () => (
-            <ChatHeaderTitle
-              otherUserName={route.params.otherUserName}
-              otherUserAvatarUrl={route.params.otherUserAvatarUrl}
-              listingTitle={route.params.listingTitle}
-            />
-          ),
-        })}
+        options={{ headerShown: false }}
       />
-      <ProfileStack.Screen name="MyListings" component={MyListingsScreen} options={{ title: 'My Listings' }} />
-      <ProfileStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-      <ProfileStack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: '' }} />
-      <ProfileStack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ title: '' }} />
+      <ProfileStack.Screen
+        name="MyListings"
+        component={MyListingsScreen}
+        options={{ title: 'My Listings' }}
+      />
+      <ProfileStack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Settings' }}
+      />
+      <ProfileStack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="ListingDetail"
+        component={ListingDetailScreen}
+        options={{ headerShown: false }}
+      />
       <ProfileStack.Screen
         name="WriteReview"
         component={WriteReviewScreen}
@@ -175,9 +202,7 @@ function MessagesIcon({ focused }: { focused: boolean }) {
       />
       {totalUnread > 0 && (
         <View style={badgeStyles.container}>
-          <Text style={badgeStyles.text}>
-            {totalUnread > 99 ? '99+' : totalUnread}
-          </Text>
+          <Text style={badgeStyles.text}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
         </View>
       )}
     </View>
@@ -247,8 +272,8 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           typeof options.tabBarLabel === 'string'
             ? options.tabBarLabel
             : typeof options.title === 'string'
-            ? options.title
-            : route.name.replace('Tab', '');
+              ? options.title
+              : route.name.replace('Tab', '');
 
         const icon = options.tabBarIcon
           ? options.tabBarIcon({ focused: isFocused, color: '', size: 24 })
@@ -384,11 +409,7 @@ export default function MainNavigator(): React.JSX.Element {
           tabBarIcon: ({ focused }) => <SavedIcon focused={focused} />,
         }}
       />
-      <Tab.Screen
-        name="SellTab"
-        component={SellNavigator}
-        options={{ title: 'SELL' }}
-      />
+      <Tab.Screen name="SellTab" component={SellNavigator} options={{ title: 'SELL' }} />
       <Tab.Screen
         name="MessagesTab"
         component={MessagesNavigator}

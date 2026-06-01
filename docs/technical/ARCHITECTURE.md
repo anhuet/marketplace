@@ -202,7 +202,9 @@ The app uses a two-root pattern via a `RootStackParamList`:
 
 All navigator screens are fully typed via `RootStackParamList`, `AuthStackParamList`, `BrowseStackParamList`, `SearchStackParamList`, `SellStackParamList`, and `ProfileStackParamList`. Screen components receive typed props via `NativeStackScreenProps<T>` and `CompositeScreenProps<T, U>`.
 
-ChatThreadScreen is reachable from both the Browse stack (via ListingDetail → "Message Seller") and the Profile stack (via ConversationList). Each stack hosts its own instance of the component.
+ChatThreadScreen is reachable from the Browse stack (via ListingDetail → "Message Seller"), the Messages stack (from ConversationList), and the Profile stack (via ConversationList). Each stack hosts its own instance of the component.
+
+**iOS 26 UINavigationBar workaround**: iOS 26 redesigned `UINavigationBar` internals (`_UINavigationBarVisualProviderModernIOSSwift`); the UIAppearance proxy aborts resolving IMPs for Swift-generated ObjC selectors when a native header is visible during a push transition. The three highest-traffic child screens — `ListingDetailScreen`, `UserProfileScreen`, and `ChatThreadScreen` — are registered with `headerShown: false` in every stack that hosts them, and each renders its own custom in-screen header bar using `useSafeAreaInsets()`. `ListingDetailScreen` overlays a translucent back button on the photo carousel; `UserProfileScreen` renders a full-width header row with a back control and the seller display name; `ChatThreadScreen` renders a header row with a back control and the existing `ChatHeaderTitle` component. The `ChatHeaderTitle` import was removed from `MainNavigator.tsx` and is now imported directly by `ChatThreadScreen`. Screens with lower traffic (`EditProfile`, `MyListings`, `Settings`, `WriteReview`, `ConversationList`) still use native headers and will be migrated if they produce crashes.
 
 ### State Management
 

@@ -8,9 +8,10 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 
 import { api } from '../../lib/api';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
@@ -56,11 +57,17 @@ export default function UserProfileScreen(): React.JSX.Element {
   const navigation = useNavigation<AnyNavigation>();
   const route = useRoute<RouteProp<{ UserProfile: UserProfileRouteParams }, 'UserProfile'>>();
   const { userId, sellerName, sellerAvatarUrl } = route.params;
+  const insets = useSafeAreaInsets();
 
   // Profile data — pre-seeded from route params if available
   const [profile, setProfile] = useState<PublicUserProfile | null>(
     sellerName
-      ? { displayName: sellerName, avatarUrl: sellerAvatarUrl ?? null, averageRating: 0, ratingCount: 0 }
+      ? {
+          displayName: sellerName,
+          avatarUrl: sellerAvatarUrl ?? null,
+          averageRating: 0,
+          ratingCount: 0,
+        }
       : null,
   );
   const [profileLoading, setProfileLoading] = useState(true);
@@ -143,14 +150,6 @@ export default function UserProfileScreen(): React.JSX.Element {
     loadReviews(1);
   }, [loadProfile, loadListings, loadReviews]);
 
-  // Set screen title — use params immediately, update once profile loads
-  useEffect(() => {
-    const title = profile?.displayName || sellerName;
-    if (title) {
-      navigation.setOptions({ title });
-    }
-  }, [navigation, profile?.displayName, sellerName]);
-
   // ── Listing press ────────────────────────────────────────────────────────
 
   const handleListingPress = useCallback(
@@ -196,9 +195,7 @@ export default function UserProfileScreen(): React.JSX.Element {
           </View>
           <StarRating rating={item.rating} size={14} showNumeric={false} />
         </View>
-        {item.comment ? (
-          <Text style={styles.reviewComment}>{item.comment}</Text>
-        ) : null}
+        {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
       </View>
     ),
     [],
@@ -263,11 +260,7 @@ export default function UserProfileScreen(): React.JSX.Element {
               {profile?.displayName ?? ''}
             </Text>
             {profile && (profile.averageRating > 0 || profile.ratingCount > 0) ? (
-              <StarRating
-                rating={profile.averageRating}
-                count={profile.ratingCount}
-                size={16}
-              />
+              <StarRating rating={profile.averageRating} count={profile.ratingCount} size={16} />
             ) : (
               <Text style={styles.noRating}>No reviews yet</Text>
             )}
@@ -353,8 +346,28 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   // ── Main render ─────────────────────────────────────────────────────────
 
+  const displayTitle = profile?.displayName || sellerName;
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <View style={styles.safeArea}>
+      {/* Custom header — replaces native header to avoid iOS 26 UINavigationBar SIGABRT */}
+      <View style={[styles.customHeader, { paddingTop: insets.top }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        {displayTitle ? (
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {displayTitle}
+          </Text>
+        ) : null}
+        {/* Spacer to balance back button and keep title centred */}
+        <View style={styles.backButton} />
+      </View>
       <FlatList
         data={listingsLoading || listingsError || listings.length === 0 ? [] : listings}
         keyExtractor={(item) => item.id}
@@ -363,10 +376,10 @@ export default function UserProfileScreen(): React.JSX.Element {
         ListFooterComponent={renderFooter}
         numColumns={1}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom }]}
         accessibilityLabel={`${profile?.displayName ?? 'User'}'s profile`}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -382,6 +395,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xxl,
+  },
+
+  // Custom in-screen header (replaces native header)
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    ...typography.title,
+    color: colors.textPrimary,
+    textAlign: 'center',
   },
 
   // Profile header

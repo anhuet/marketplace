@@ -10,9 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Message } from '@marketplace/shared';
 
 import { api } from '../../lib/api';
@@ -21,12 +22,16 @@ import { useChatStore, PendingMessage } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { BrowseStackParamList, ProfileStackParamList } from '../../navigation/types';
 import { colors, spacing, radius, typography } from '../../theme/tokens';
+import ChatHeaderTitle from '../../navigation/ChatHeaderTitle';
+import { Ionicons } from '@expo/vector-icons';
 
-// ChatThread is reachable from both BrowseStack and ProfileStack.
-// We use a union route type so the component works in both navigators.
+// ChatThread is reachable from BrowseStack, MessagesStack, and ProfileStack.
+// We use a union route type so the component works in all navigators.
 type BrowseChatRoute = NativeStackScreenProps<BrowseStackParamList, 'ChatThread'>['route'];
 type ProfileChatRoute = NativeStackScreenProps<ProfileStackParamList, 'ChatThread'>['route'];
 type ChatThreadRoute = BrowseChatRoute | ProfileChatRoute;
+
+type AnyNavigation = NativeStackNavigationProp<BrowseStackParamList & ProfileStackParamList>;
 
 // Unique ID generator for optimistic messages
 function generateTempId(): string {
@@ -62,17 +67,10 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps): React.JSX.Elemen
           {message.content}
         </Text>
         <View style={styles.bubbleMeta}>
-          <Text
-            style={[
-              styles.bubbleTime,
-              isOwn ? styles.bubbleTimeOwn : styles.bubbleTimeOther,
-            ]}
-          >
+          <Text style={[styles.bubbleTime, isOwn ? styles.bubbleTimeOwn : styles.bubbleTimeOther]}>
             {formatMessageTime(message.createdAt)}
           </Text>
-          {message.failed && (
-            <Text style={styles.failedLabel}> Failed</Text>
-          )}
+          {message.failed && <Text style={styles.failedLabel}> Failed</Text>}
           {message.pending && !message.failed && (
             <Text style={[styles.bubbleTime, styles.pendingLabel]}> Sending…</Text>
           )}
@@ -83,8 +81,13 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps): React.JSX.Elemen
 }
 
 export default function ChatThreadScreen(): React.JSX.Element {
+  const navigation = useNavigation<AnyNavigation>();
   const route = useRoute<ChatThreadRoute>();
   const { conversationId } = route.params;
+  const insets = useSafeAreaInsets();
+
+  // Route params needed for the in-screen header
+  const { listingTitle, otherUserName, otherUserAvatarUrl } = route.params;
 
   const currentUser = useAuthStore((s) => s.user);
   const {
@@ -208,12 +211,33 @@ export default function ChatThreadScreen(): React.JSX.Element {
   // to render newest messages at the bottom.
   const invertedMessages = [...messages].reverse();
 
+  // Height of the custom header: paddingTop (insets.top) + inner height (spacing.sm * 2 + 44)
+  const customHeaderHeight = insets.top + spacing.sm * 2 + 44;
+
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <View style={styles.container}>
+      {/* Custom in-screen header — replaces native header to avoid iOS 26 UINavigationBar SIGABRT */}
+      <View style={[styles.chatHeader, { paddingTop: insets.top }]}>
+        <TouchableOpacity
+          style={styles.chatBackButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={styles.chatHeaderTitle}>
+          <ChatHeaderTitle
+            otherUserName={otherUserName}
+            otherUserAvatarUrl={otherUserAvatarUrl}
+            listingTitle={listingTitle}
+          />
+        </View>
+      </View>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? customHeaderHeight : 0}
       >
         {loadingHistory && messages.length === 0 ? (
           <View style={styles.centered}>
@@ -224,10 +248,7 @@ export default function ChatThreadScreen(): React.JSX.Element {
             data={invertedMessages}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <MessageBubble
-                message={item}
-                isOwn={item.senderId === currentUser?.id}
-              />
+              <MessageBubble message={item} isOwn={item.senderId === currentUser?.id} />
             )}
             inverted
             contentContainerStyle={styles.messageList}
@@ -241,41 +262,43 @@ export default function ChatThreadScreen(): React.JSX.Element {
           />
         )}
 
-        <View style={styles.inputBar}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Type a message…"
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            maxLength={2000}
-            returnKeyType="default"
-            blurOnSubmit={false}
-            accessibilityLabel="Message input"
-            accessibilityHint="Type your message here and tap Send"
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!inputText.trim() || sending) && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSend}
-            disabled={!inputText.trim() || sending}
-            accessibilityRole="button"
-            accessibilityLabel="Send message"
-            accessibilityState={{ disabled: !inputText.trim() || sending }}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color={colors.surface} />
-            ) : (
-              <Text style={styles.sendButtonText}>Send</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <SafeAreaView edges={['bottom']} style={styles.inputSafeArea}>
+          <View style={styles.inputBar}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Type a message…"
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              maxLength={2000}
+              returnKeyType="default"
+              blurOnSubmit={false}
+              accessibilityLabel="Message input"
+              accessibilityHint="Type your message here and tap Send"
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!inputText.trim() || sending) && styles.sendButtonDisabled,
+              ]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || sending}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+              accessibilityState={{ disabled: !inputText.trim() || sending }}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={colors.surface} />
+              ) : (
+                <Text style={styles.sendButtonText}>Send</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -287,6 +310,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+
+  // Custom in-screen header
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  chatBackButton: {
+    width: 40,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatHeaderTitle: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  inputSafeArea: {
+    backgroundColor: colors.surface,
+  },
+
   centered: {
     flex: 1,
     alignItems: 'center',

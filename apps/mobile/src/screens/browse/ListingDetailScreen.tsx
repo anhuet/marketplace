@@ -11,7 +11,7 @@ import {
   View,
   ViewToken,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,7 +24,11 @@ import { useSavedStore } from '../../store/savedStore';
 import StarRating from '../../components/StarRating';
 import PrimaryButton from '../../components/PrimaryButton';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
-import { BrowseStackParamList, ProfileStackParamList, MyListingsStackParamList } from '../../navigation/types';
+import {
+  BrowseStackParamList,
+  ProfileStackParamList,
+  MyListingsStackParamList,
+} from '../../navigation/types';
 import type { ListingWithDetails } from '@marketplace/shared';
 
 type AnyStackWithUserProfile = NativeStackNavigationProp<
@@ -47,11 +51,7 @@ function SkeletonBlock({
 }): React.JSX.Element {
   return (
     <View
-      style={[
-        styles.skeleton,
-        { width: width as number, height },
-        style,
-      ]}
+      style={[styles.skeleton, { width: width as number, height }, style]}
       accessibilityLabel="Loading"
     />
   );
@@ -77,7 +77,7 @@ function ListingDetailSkeleton(): React.JSX.Element {
 
 function ListingNotFound({ onBack }: { onBack: () => void }): React.JSX.Element {
   return (
-    <SafeAreaView style={[styles.container, styles.centred]}>
+    <SafeAreaView style={[styles.container, styles.centred]} edges={['top', 'bottom']}>
       <Text style={styles.notFoundTitle}>Listing not found</Text>
       <Text style={styles.notFoundBody}>
         This listing may have been removed or is no longer available.
@@ -100,13 +100,11 @@ interface CarouselProps {
 function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-        setActiveIndex(viewableItems[0].index);
-      }
-    },
-  ).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+      setActiveIndex(viewableItems[0].index);
+    }
+  }).current;
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
@@ -150,7 +148,10 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
         })}
       />
       {sorted.length > 1 && (
-        <View style={styles.dotRow} accessibilityLabel={`Photo ${activeIndex + 1} of ${sorted.length}`}>
+        <View
+          style={styles.dotRow}
+          accessibilityLabel={`Photo ${activeIndex + 1} of ${sorted.length}`}
+        >
           {sorted.map((_, i) => (
             <View
               key={i}
@@ -203,6 +204,7 @@ type Props = NativeStackScreenProps<BrowseStackParamList, 'ListingDetail'>;
 
 export default function ListingDetailScreen({ route, navigation }: Props): React.JSX.Element {
   const { listingId } = route.params;
+  const insets = useSafeAreaInsets();
   const currentUser = useAuthStore((s) => s.user);
   const anyNavigation = useNavigation<AnyStackWithUserProfile>();
 
@@ -310,12 +312,12 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
         confirmMarkSold(buyers[0].id, buyers[0].displayName);
       } else {
         // Multiple buyers — let seller pick
-        const buttons: AlertButton[] = buyers.map(
-          (buyer) => ({
-            text: buyer.displayName,
-            onPress: () => { confirmMarkSold(buyer.id, buyer.displayName); },
-          }),
-        );
+        const buttons: AlertButton[] = buyers.map((buyer) => ({
+          text: buyer.displayName,
+          onPress: () => {
+            confirmMarkSold(buyer.id, buyer.displayName);
+          },
+        }));
         buttons.push({ text: 'Cancel' });
         Alert.alert('Who bought this item?', 'Select the buyer from your conversations.', buttons);
       }
@@ -338,7 +340,11 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
   }, [toggleSave, listingId]);
 
   if (loading) {
-    return <ListingDetailSkeleton />;
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <ListingDetailSkeleton />
+      </SafeAreaView>
+    );
   }
 
   if (notFound || !listing) {
@@ -357,9 +363,18 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
         {/* Photo Carousel */}
         <View>
           <PhotoCarousel images={listing.images} />
+          {/* Back button — overlaid on carousel, respects status bar / notch */}
+          <TouchableOpacity
+            style={[styles.carouselBackButton, { top: insets.top + spacing.sm }]}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.surface} />
+          </TouchableOpacity>
           {currentUser && !isOwner && (
             <TouchableOpacity
-              style={styles.saveButton}
+              style={[styles.saveButton, { top: insets.top + spacing.sm }]}
               onPress={handleToggleSave}
               accessibilityRole="button"
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save listing'}
@@ -386,10 +401,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
           <Text style={styles.title} accessibilityRole="header">
             {listing.title}
           </Text>
-          <Text
-            style={styles.price}
-            accessibilityLabel={`Price: ${formatPrice(listing.price)}`}
-          >
+          <Text style={styles.price} accessibilityLabel={`Price: ${formatPrice(listing.price)}`}>
             {formatPrice(listing.price)}
           </Text>
 
@@ -405,7 +417,10 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
                 {formatDistance(listing.distanceKm)}
               </Text>
             )}
-            <Text style={styles.metaText} accessibilityLabel={`Posted ${formatDate(listing.createdAt)}`}>
+            <Text
+              style={styles.metaText}
+              accessibilityLabel={`Posted ${formatDate(listing.createdAt)}`}
+            >
               Posted {formatDate(listing.createdAt)}
             </Text>
           </View>
@@ -641,10 +656,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.5)',
   },
 
+  // Back button overlaid on carousel
+  carouselBackButton: {
+    position: 'absolute',
+    left: spacing.md,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   // Save button
   saveButton: {
     position: 'absolute',
-    top: spacing.md,
     right: spacing.md,
     width: 40,
     height: 40,
