@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -108,6 +108,17 @@ export default function ChatThreadScreen(): React.JSX.Element {
   const [inputText, setInputText] = useState('');
   const inputRef = useRef<TextInput>(null);
 
+  // Mount guard — prevents setState after unmount (iOS 26 RCTUIManager teardown hardening).
+  // Guards handleSend: if the user navigates away while api.sendMessage is in-flight, the
+  // setSending(false) in the finally block would otherwise fire on an unmounted component.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Mark this conversation as active so incoming socket messages don't increment unread
   useEffect(() => {
     setActiveConversation(conversationId);
@@ -188,13 +199,15 @@ export default function ChatThreadScreen(): React.JSX.Element {
 
     try {
       const response = await api.sendMessage(conversationId, content);
+      if (!isMountedRef.current) return;
       const confirmed: Message = (response.data as { message: Message }).message;
       replacePendingMessage(conversationId, tempId, confirmed);
       updateConversationLastMessage(conversationId, confirmed);
     } catch {
+      if (!isMountedRef.current) return;
       markMessageFailed(conversationId, tempId);
     } finally {
-      setSending(false);
+      if (isMountedRef.current) setSending(false);
     }
   }, [
     inputText,
@@ -213,6 +226,27 @@ export default function ChatThreadScreen(): React.JSX.Element {
 
   // Height of the custom header: paddingTop (insets.top) + inner height (spacing.sm * 2 + 44)
   const customHeaderHeight = insets.top + spacing.sm * 2 + 44;
+
+  // Stabilise renderItem and ListEmptyComponent with useCallback/useMemo so their references
+  // don't change on every render. Inline function/object props on FlatList can cause the legacy
+  // RCTUIManager renderer to hold stale view refs during teardown, triggering the iOS 26
+  // conformsToProtocol: SIGABRT when navigating away.
+  const renderItem = useCallback(
+    ({ item }: { item: PendingMessage }) => (
+      <MessageBubble message={item} isOwn={item.senderId === currentUser?.id} />
+    ),
+    [currentUser?.id],
+  );
+
+  const listEmptyComponent = useMemo(
+    () => (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No messages yet.</Text>
+        <Text style={styles.emptySubtext}>Send the first message below.</Text>
+      </View>
+    ),
+    [],
+  );
 
   return (
     <View style={styles.container}>
@@ -247,18 +281,11 @@ export default function ChatThreadScreen(): React.JSX.Element {
           <FlatList
             data={invertedMessages}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <MessageBubble message={item} isOwn={item.senderId === currentUser?.id} />
-            )}
+            renderItem={renderItem}
             inverted
             contentContainerStyle={styles.messageList}
             keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No messages yet.</Text>
-                <Text style={styles.emptySubtext}>Send the first message below.</Text>
-              </View>
-            }
+            ListEmptyComponent={listEmptyComponent}
           />
         )}
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   AlertButton,
@@ -108,7 +108,9 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-  const sorted = [...images].sort((a, b) => a.order - b.order);
+  // Stable sorted reference — prevents FlatList data prop from changing identity on every render,
+  // which can destabilise RCTUIManager view references during teardown (iOS 26 hardening).
+  const sorted = useMemo(() => [...images].sort((a, b) => a.order - b.order), [images]);
 
   if (sorted.length === 0) {
     return (
@@ -152,9 +154,9 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
           style={styles.dotRow}
           accessibilityLabel={`Photo ${activeIndex + 1} of ${sorted.length}`}
         >
-          {sorted.map((_, i) => (
+          {sorted.map((img, i) => (
             <View
-              key={i}
+              key={img.id}
               style={[styles.dot, i === activeIndex ? styles.dotActive : styles.dotInactive]}
             />
           ))}
@@ -217,13 +219,26 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [markSoldLoading, setMarkSoldLoading] = useState(false);
 
+  // Mount guard — prevents setState after unmount (iOS 26 RCTUIManager teardown hardening).
+  // Async handlers (fetch, messaging, mark-sold) check this ref before calling setState so
+  // that navigating away while a request is in-flight does not trigger a _purgeChildren abort.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchListing = useCallback(async () => {
     try {
       setLoading(true);
       setNotFound(false);
       const response = await api.getListing(listingId);
+      if (!isMountedRef.current) return;
       setListing((response.data as { listing: ListingWithDetails }).listing);
     } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       const status =
         err &&
         typeof err === 'object' &&
@@ -236,7 +251,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
         navigation.goBack();
       }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }, [listingId, navigation]);
 
@@ -251,6 +266,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
     try {
       setMessagingLoading(true);
       const response = await api.startConversation(listing.id);
+      if (!isMountedRef.current) return;
       const conversation = (response.data as { conversation: { id: string } }).conversation;
       navigation.navigate('ChatThread', {
         conversationId: conversation.id,
@@ -259,9 +275,10 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
         otherUserAvatarUrl: listing.seller?.avatarUrl ?? null,
       });
     } catch {
+      if (!isMountedRef.current) return;
       Alert.alert('Error', 'Could not start conversation. Please try again.');
     } finally {
-      setMessagingLoading(false);
+      if (isMountedRef.current) setMessagingLoading(false);
     }
   }, [listing, navigation]);
 
@@ -280,14 +297,16 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
             try {
               setMarkSoldLoading(true);
               const res = await api.markListingSold(listing.id, buyerId);
+              if (!isMountedRef.current) return;
               const updated = (res.data as { listing: ListingWithDetails }).listing;
               setListing((prev: ListingWithDetails | null) =>
                 prev ? { ...prev, ...updated } : prev,
               );
             } catch {
+              if (!isMountedRef.current) return;
               Alert.alert('Error', 'Could not update listing status. Please try again.');
             } finally {
-              setMarkSoldLoading(false);
+              if (isMountedRef.current) setMarkSoldLoading(false);
             }
           },
         },
@@ -301,6 +320,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
     try {
       setMarkSoldLoading(true);
       const res = await api.getListingBuyers(listing.id);
+      if (!isMountedRef.current) return;
       const buyers = res.data.buyers ?? [];
       setMarkSoldLoading(false);
 
@@ -322,6 +342,7 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
         Alert.alert('Who bought this item?', 'Select the buyer from your conversations.', buttons);
       }
     } catch {
+      if (!isMountedRef.current) return;
       setMarkSoldLoading(false);
       Alert.alert('Error', 'Could not load buyers. Please try again.');
     }
