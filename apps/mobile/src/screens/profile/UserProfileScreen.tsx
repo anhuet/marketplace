@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -59,6 +59,16 @@ export default function UserProfileScreen(): React.JSX.Element {
   const { userId, sellerName, sellerAvatarUrl } = route.params;
   const insets = useSafeAreaInsets();
 
+  // Mount guard — prevents setState after the screen has unmounted (avoids view-registry
+  // corruption in RCTUIManager when async fetches resolve during or after navigation-away).
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Profile data — pre-seeded from route params if available
   const [profile, setProfile] = useState<PublicUserProfile | null>(
     sellerName
@@ -89,39 +99,50 @@ export default function UserProfileScreen(): React.JSX.Element {
   // ── Data fetching ────────────────────────────────────────────────────────
 
   const loadProfile = useCallback(async () => {
+    if (!isMountedRef.current) return;
     setProfileLoading(true);
     setProfileError(null);
     try {
       const ratingRes = await api.getUserRating(userId);
+      if (!isMountedRef.current) return;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const { averageRating, ratingCount } = ratingRes.data as {
+        averageRating: number;
+        ratingCount: number;
+      };
       setProfile((prev) => ({
         displayName: prev?.displayName ?? sellerName ?? '',
         avatarUrl: prev?.avatarUrl ?? sellerAvatarUrl ?? null,
-        averageRating: ratingRes.data.averageRating,
-        ratingCount: ratingRes.data.ratingCount,
+        averageRating,
+        ratingCount,
       }));
     } catch {
-      setProfileError('Could not load profile.');
+      if (isMountedRef.current) setProfileError('Could not load profile.');
     } finally {
-      setProfileLoading(false);
+      if (isMountedRef.current) setProfileLoading(false);
     }
   }, [userId, sellerName, sellerAvatarUrl]);
 
   const loadListings = useCallback(async () => {
+    if (!isMountedRef.current) return;
     setListingsLoading(true);
     setListingsError(null);
     try {
       const res = await api.getSellerListings(userId);
-      const fetchedListings: ListingWithDetails[] = res.data.listings ?? [];
+      if (!isMountedRef.current) return;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const { listings: fetchedListings = [] } = res.data as { listings: ListingWithDetails[] };
       setListings(fetchedListings);
     } catch {
-      setListingsError('Could not load listings.');
+      if (isMountedRef.current) setListingsError('Could not load listings.');
     } finally {
-      setListingsLoading(false);
+      if (isMountedRef.current) setListingsLoading(false);
     }
   }, [userId]);
 
   const loadReviews = useCallback(
     async (page: number, append = false) => {
+      if (!isMountedRef.current) return;
       if (page === 1) {
         setReviewsLoading(true);
         setReviewsError(null);
@@ -130,24 +151,27 @@ export default function UserProfileScreen(): React.JSX.Element {
       }
       try {
         const res = await api.getUserReviews(userId, page);
-        const data = res.data;
+        if (!isMountedRef.current) return;
+        const data = res.data as { reviews: ReviewWithDetails[]; hasMore: boolean };
         setReviews((prev) => (append ? [...prev, ...data.reviews] : data.reviews));
         setReviewsHasMore(data.hasMore ?? false);
         setReviewsPage(page);
       } catch {
-        if (page === 1) setReviewsError('Could not load reviews.');
+        if (isMountedRef.current && page === 1) setReviewsError('Could not load reviews.');
       } finally {
-        setReviewsLoading(false);
-        setReviewsLoadingMore(false);
+        if (isMountedRef.current) {
+          setReviewsLoading(false);
+          setReviewsLoadingMore(false);
+        }
       }
     },
     [userId],
   );
 
   useEffect(() => {
-    loadProfile();
-    loadListings();
-    loadReviews(1);
+    void loadProfile();
+    void loadListings();
+    void loadReviews(1);
   }, [loadProfile, loadListings, loadReviews]);
 
   // ── Listing press ────────────────────────────────────────────────────────
@@ -163,7 +187,7 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   const handleLoadMoreReviews = useCallback(() => {
     if (reviewsHasMore && !reviewsLoadingMore) {
-      loadReviews(reviewsPage + 1, true);
+      void loadReviews(reviewsPage + 1, true);
     }
   }, [reviewsHasMore, reviewsLoadingMore, reviewsPage, loadReviews]);
 
@@ -210,7 +234,10 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   // ── Header ────────────────────────────────────────────────────────────────
 
-  const renderHeader = () => {
+  // useMemo gives FlatList a stable reference across renders so it does NOT unmount/remount
+  // the header subtree on every state change — the primary teardown hazard behind the
+  // RCTUIManager _purgeChildren / conformsToProtocol: SIGABRT on iOS 26 (build #25).
+  const ListHeaderComponent = useMemo(() => {
     if (profileLoading && !profile) {
       return (
         <View style={styles.profileHeaderLoading} accessibilityLabel="Loading profile">
@@ -224,7 +251,7 @@ export default function UserProfileScreen(): React.JSX.Element {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{profileError}</Text>
           <TouchableOpacity
-            onPress={loadProfile}
+            onPress={() => void loadProfile()}
             accessibilityRole="button"
             accessibilityLabel="Retry loading profile"
           >
@@ -282,7 +309,7 @@ export default function UserProfileScreen(): React.JSX.Element {
           <View style={styles.errorRow}>
             <Text style={styles.errorText}>{listingsError}</Text>
             <TouchableOpacity
-              onPress={loadListings}
+              onPress={() => void loadListings()}
               accessibilityRole="button"
               accessibilityLabel="Retry loading listings"
             >
@@ -294,54 +321,80 @@ export default function UserProfileScreen(): React.JSX.Element {
         ) : null}
       </View>
     );
-  };
+  }, [
+    profile,
+    profileLoading,
+    profileError,
+    listingsLoading,
+    listingsError,
+    listings.length,
+    loadProfile,
+    loadListings,
+  ]);
 
-  const renderFooter = () => (
-    <View style={styles.sectionContainer}>
-      <Text style={styles.sectionTitle} accessibilityRole="header">
-        Reviews
-      </Text>
-      {reviewsLoading ? (
-        <ActivityIndicator
-          size="small"
-          color={colors.primaryDark}
-          style={styles.inlineLoader}
-          accessibilityLabel="Loading reviews"
-        />
-      ) : reviewsError ? (
-        <View style={styles.errorRow}>
-          <Text style={styles.errorText}>{reviewsError}</Text>
-          <TouchableOpacity
-            onPress={() => loadReviews(1)}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading reviews"
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : reviews.length === 0 ? (
-        <Text style={styles.emptyText}>No reviews yet.</Text>
-      ) : (
-        <>
-          {reviews.map((review) => renderReviewItem({ item: review }))}
-          {reviewsHasMore && (
+  // useMemo for same reason — stable reference prevents FlatList footer remount on every re-render.
+  const ListFooterComponent = useMemo(
+    () => (
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionTitle} accessibilityRole="header">
+          Reviews
+        </Text>
+        {reviewsLoading ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.primaryDark}
+            style={styles.inlineLoader}
+            accessibilityLabel="Loading reviews"
+          />
+        ) : reviewsError ? (
+          <View style={styles.errorRow}>
+            <Text style={styles.errorText}>{reviewsError}</Text>
             <TouchableOpacity
-              style={styles.loadMoreButton}
-              onPress={handleLoadMoreReviews}
-              disabled={reviewsLoadingMore}
+              onPress={() => void loadReviews(1)}
               accessibilityRole="button"
-              accessibilityLabel="Load more reviews"
+              accessibilityLabel="Retry loading reviews"
             >
-              {reviewsLoadingMore ? (
-                <ActivityIndicator size="small" color={colors.primaryDark} />
-              ) : (
-                <Text style={styles.loadMoreText}>Load more</Text>
-              )}
+              <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
-          )}
-        </>
-      )}
-    </View>
+          </View>
+        ) : reviews.length === 0 ? (
+          <Text style={styles.emptyText}>No reviews yet.</Text>
+        ) : (
+          <>
+            {reviews.map((review) => (
+              // key is required here — review.id is stable and unique, preventing incorrect
+              // reconciliation when the list updates (missing key was a secondary teardown hazard).
+              <React.Fragment key={review.id}>{renderReviewItem({ item: review })}</React.Fragment>
+            ))}
+            {reviewsHasMore && (
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={() => void handleLoadMoreReviews()}
+                disabled={reviewsLoadingMore}
+                accessibilityRole="button"
+                accessibilityLabel="Load more reviews"
+              >
+                {reviewsLoadingMore ? (
+                  <ActivityIndicator size="small" color={colors.primaryDark} />
+                ) : (
+                  <Text style={styles.loadMoreText}>Load more</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
+    ),
+    [
+      reviews,
+      reviewsLoading,
+      reviewsError,
+      reviewsHasMore,
+      reviewsLoadingMore,
+      loadReviews,
+      handleLoadMoreReviews,
+      renderReviewItem,
+    ],
   );
 
   // ── Main render ─────────────────────────────────────────────────────────
@@ -372,8 +425,8 @@ export default function UserProfileScreen(): React.JSX.Element {
         data={listingsLoading || listingsError || listings.length === 0 ? [] : listings}
         keyExtractor={(item) => item.id}
         renderItem={renderListingItem}
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
+        ListHeaderComponent={ListHeaderComponent}
+        ListFooterComponent={ListFooterComponent}
         numColumns={1}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom }]}
