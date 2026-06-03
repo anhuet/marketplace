@@ -32,7 +32,15 @@ const discovery = {
   tokenEndpoint: `https://${domain}/oauth/token`,
 };
 
+// In bare/standalone EAS builds, `Constants.executionEnvironment` is "bare" on Android and
+// the `path` option alone is not reliably applied by Linking.createURL at module-init time
+// (the embedded app.config asset may not yet be available synchronously).  The `native`
+// option is the documented override for bare/standalone contexts and is used when
+// executionEnvironment is Bare or Standalone.  In Expo Go (StoreClient), `native` is
+// ignored and makeRedirectUri falls back to the Linking.createURL path, which produces the
+// correct exp://192.168.x.x:8081/--/auth/callback URL that the dev allowlist entries cover.
 const redirectUri = AuthSession.makeRedirectUri({
+  native: 'marketplace://auth/callback',
   scheme: 'marketplace',
   path: 'auth/callback',
 });
