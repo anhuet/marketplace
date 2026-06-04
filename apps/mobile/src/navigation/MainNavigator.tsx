@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -232,8 +233,10 @@ function ProfileIcon({ focused }: { focused: boolean }) {
 // ─── Custom tab bar ───────────────────────────────────────────────────────────
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const paddingBottom = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 8);
   return (
-    <View style={tabBarStyles.container}>
+    <View style={[tabBarStyles.container, { paddingBottom }]}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const isFocused = state.index === index;
@@ -305,7 +308,6 @@ const tabBarStyles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.sm,
     alignItems: 'flex-end',
