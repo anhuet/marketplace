@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +18,7 @@ import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { MyListingsStackScreenProps } from '../../navigation/types';
 import type { ListingWithDetails } from '@marketplace/shared';
+import ScreenHeader from '../../components/ScreenHeader';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,7 @@ const STATUS_COLOR: Record<string, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MyListingsScreen({ navigation }: Props): React.JSX.Element {
+  const isMounted = useIsMounted();
   const { user } = useAuthStore();
 
   const [listings, setListings] = useState<ListingWithDetails[]>([]);
@@ -61,13 +64,13 @@ export default function MyListingsScreen({ navigation }: Props): React.JSX.Eleme
     setError(null);
     try {
       const res = await api.getSellerListings(user.id);
-      setListings(res.data.listings ?? []);
+      if (isMounted()) setListings(res.data.listings ?? []);
     } catch {
-      setError('Could not load listings. Please try again.');
+      if (isMounted()) setError('Could not load listings. Please try again.');
     } finally {
-      setLoading(false);
+      if (isMounted()) setLoading(false);
     }
-  }, [user?.id]);
+  }, [isMounted, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -101,13 +104,14 @@ export default function MyListingsScreen({ navigation }: Props): React.JSX.Eleme
               setMarkingSoldId(listing.id);
               try {
                 await api.markListingSold(listing.id);
-                setListings((prev) =>
-                  prev.map((l) => (l.id === listing.id ? { ...l, status: 'SOLD' as const } : l)),
-                );
+                if (isMounted())
+                  setListings((prev) =>
+                    prev.map((l) => (l.id === listing.id ? { ...l, status: 'SOLD' as const } : l)),
+                  );
               } catch {
-                Alert.alert('Error', 'Could not update listing. Please try again.');
+                if (isMounted()) Alert.alert('Error', 'Could not update listing. Please try again.');
               } finally {
-                setMarkingSoldId(null);
+                if (isMounted()) setMarkingSoldId(null);
               }
             },
           },
@@ -131,11 +135,11 @@ export default function MyListingsScreen({ navigation }: Props): React.JSX.Eleme
               setDeletingId(listing.id);
               try {
                 await api.deleteListing(listing.id);
-                setListings((prev) => prev.filter((l) => l.id !== listing.id));
+                if (isMounted()) setListings((prev) => prev.filter((l) => l.id !== listing.id));
               } catch {
-                Alert.alert('Error', 'Could not delete listing. Please try again.');
+                if (isMounted()) Alert.alert('Error', 'Could not delete listing. Please try again.');
               } finally {
-                setDeletingId(null);
+                if (isMounted()) setDeletingId(null);
               }
             },
           },
@@ -266,30 +270,37 @@ export default function MyListingsScreen({ navigation }: Props): React.JSX.Eleme
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.centered} edges={['bottom']}>
-        <ActivityIndicator size="large" color={colors.primaryDark} />
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <ScreenHeader title="My Listings" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primaryDark} />
+        </View>
       </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.centered} edges={['bottom']}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={loadListings}
-          accessibilityRole="button"
-          accessibilityLabel="Retry"
-        >
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <ScreenHeader title="My Listings" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={loadListings}
+            accessibilityRole="button"
+            accessibilityLabel="Retry"
+          >
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <ScreenHeader title="My Listings" />
       <FlatList
         data={listings}
         keyExtractor={(item) => item.id}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +19,7 @@ import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { MessagesStackParamList, ProfileStackParamList } from '../../navigation/types';
 import { colors, spacing, radius, typography } from '../../theme/tokens';
+import ScreenHeader from '../../components/ScreenHeader';
 
 // Raw shape returned by GET /api/v1/conversations — last message comes back in a `messages` array
 interface RawConversation {
@@ -161,6 +163,7 @@ function ConversationRow({
 }
 
 export default function ConversationListScreen(): React.JSX.Element {
+  const isMounted = useIsMounted();
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList & MessagesStackParamList>>();
   const currentUser = useAuthStore((s) => s.user);
   const { conversations, setConversations } = useChatStore();
@@ -172,33 +175,35 @@ export default function ConversationListScreen(): React.JSX.Element {
     setError(null);
     try {
       const response = await api.getConversations();
-      const raw: RawConversation[] = (response.data as { conversations: RawConversation[] })
-        .conversations;
+      if (isMounted()) {
+        const raw: RawConversation[] = (response.data as { conversations: RawConversation[] })
+          .conversations;
 
-      // Normalise to ConversationWithDetails shape expected by the store
-      const normalised: ConversationWithDetails[] = raw.map((c) => ({
-        id: c.id,
-        listingId: c.listingId,
-        buyerId: c.buyerId,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-        listing: {
-          ...c.listing,
-          status: c.listing.status as ListingStatus,
-          images: c.listing.images.map((img) => ({ ...img, listingId: c.listingId })),
-        },
-        buyer: { averageRating: 0, ratingCount: 0, ...c.buyer },
-        lastMessage: c.messages.length > 0 ? c.messages[c.messages.length - 1] : null,
-        unreadCount: c.unreadCount,
-      }));
+        // Normalise to ConversationWithDetails shape expected by the store
+        const normalised: ConversationWithDetails[] = raw.map((c) => ({
+          id: c.id,
+          listingId: c.listingId,
+          buyerId: c.buyerId,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          listing: {
+            ...c.listing,
+            status: c.listing.status as ListingStatus,
+            images: c.listing.images.map((img) => ({ ...img, listingId: c.listingId })),
+          },
+          buyer: { averageRating: 0, ratingCount: 0, ...c.buyer },
+          lastMessage: c.messages.length > 0 ? c.messages[c.messages.length - 1] : null,
+          unreadCount: c.unreadCount,
+        }));
 
-      setConversations(normalised);
+        setConversations(normalised);
+      }
     } catch {
-      setError('Failed to load conversations. Pull down to retry.');
+      if (isMounted()) setError('Failed to load conversations. Pull down to retry.');
     } finally {
-      setLoading(false);
+      if (isMounted()) setLoading(false);
     }
-  }, [setConversations]);
+  }, [isMounted, setConversations]);
 
   useEffect(() => {
     fetchConversations();
@@ -226,30 +231,37 @@ export default function ConversationListScreen(): React.JSX.Element {
 
   if (loading && conversations.length === 0) {
     return (
-      <SafeAreaView style={styles.centered} edges={['bottom']}>
-        <ActivityIndicator size="large" color={colors.primaryDark} />
+      <SafeAreaView style={styles.flex} edges={['bottom']}>
+        <ScreenHeader title="Messages" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primaryDark} />
+        </View>
       </SafeAreaView>
     );
   }
 
   if (error && conversations.length === 0) {
     return (
-      <SafeAreaView style={styles.centered} edges={['bottom']}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={fetchConversations}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading conversations"
-        >
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.flex} edges={['bottom']}>
+        <ScreenHeader title="Messages" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchConversations}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading conversations"
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScreenHeader title="Messages" />
       <FlatList
         data={conversations}
         keyExtractor={(item) => item.id}
@@ -280,6 +292,10 @@ export default function ConversationListScreen(): React.JSX.Element {
 const THUMBNAIL_SIZE = 56;
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,

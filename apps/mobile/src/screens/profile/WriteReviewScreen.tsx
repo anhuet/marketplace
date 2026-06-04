@@ -20,6 +20,7 @@ import { colors, radius, spacing, typography } from '../../theme/tokens';
 import InteractiveStarRating from '../../components/InteractiveStarRating';
 import FormInput from '../../components/FormInput';
 import PrimaryButton from '../../components/PrimaryButton';
+import ScreenHeader from '../../components/ScreenHeader';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -113,10 +114,11 @@ export default function WriteReviewScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <ScreenHeader title="Write a Review" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 44 : 0}
       >
         <ScrollView
           style={styles.flex}

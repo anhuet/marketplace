@@ -25,6 +25,7 @@ import { Image } from 'expo-image';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import InactiveUserBanner from '../../components/InactiveUserBanner';
 import type { BrowseStackScreenProps } from '../../navigation/types';
+import { useIsMounted } from '../../hooks/useIsMounted';
 
 // -----------------------------------------------------------------
 // Types & constants
@@ -305,6 +306,7 @@ const feedStyles = StyleSheet.create({
 // -----------------------------------------------------------------
 
 export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
+  const isMounted = useIsMounted();
   const insets = useSafeAreaInsets();
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const clearNotifications = useNotificationStore((s) => s.clearUnread);
@@ -347,6 +349,7 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   } | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
+      if (!isMounted()) return null;
       if (status !== 'granted') {
         setLocationPermissionDenied(true);
         return null;
@@ -355,13 +358,14 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+      if (!isMounted()) return null;
       const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       setLastKnownLocation(coords);
       return coords;
     } catch {
       return null;
     }
-  }, [setLastKnownLocation]);
+  }, [isMounted, setLastKnownLocation]);
 
   // -----------------------------------------------------------------
   // Fetch listings
@@ -393,16 +397,18 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
           page: pageNum,
           limit: PAGE_LIMIT,
         });
+        if (!isMounted()) return;
         const data = response.data as NearbyListingsResponse;
         setListings((prev) => (append ? [...prev, ...data.listings] : data.listings));
         setHasMore(data.hasMore);
         setPage(pageNum);
         setFetchError(null);
       } catch {
+        if (!isMounted()) return;
         setFetchError('Could not load listings. Please try again.');
       }
     },
-    [],
+    [isMounted],
   );
 
   const loadInitial = useCallback(
@@ -410,11 +416,13 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       let coords = lastKnownLocation;
       if (!coords) {
         const acquired = await requestLocation();
+        if (!isMounted()) return;
         if (!acquired) return;
         coords = acquired;
       }
       if (refresh) {
         const fresh = await requestLocation();
+        if (!isMounted()) return;
         if (fresh) coords = fresh;
         setIsRefreshing(true);
       } else {
@@ -428,10 +436,11 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
         km: radiusKm,
         append: false,
       });
+      if (!isMounted()) return;
       if (refresh) setIsRefreshing(false);
       else setIsLoading(false);
     },
-    [lastKnownLocation, requestLocation, fetchListings, appliedQuery, selectedCategoryId, radiusKm],
+    [isMounted, lastKnownLocation, requestLocation, fetchListings, appliedQuery, selectedCategoryId, radiusKm],
   );
 
   const loadNextPage = useCallback(async () => {
@@ -445,8 +454,10 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       km: radiusKm,
       append: true,
     });
+    if (!isMounted()) return;
     setIsFetchingMore(false);
   }, [
+    isMounted,
     hasMore,
     isFetchingMore,
     isLoading,
@@ -465,12 +476,13 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   const fetchCategories = useCallback(async () => {
     try {
       const response = await api.getCategories();
+      if (!isMounted()) return;
       const data = response.data as CategoriesResponse;
       setCategories(data.categories);
     } catch {
       // Non-critical
     }
-  }, []);
+  }, [isMounted]);
 
   // -----------------------------------------------------------------
   // Effects

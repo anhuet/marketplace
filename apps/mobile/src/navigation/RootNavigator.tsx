@@ -1,5 +1,9 @@
 import React, { useEffect } from 'react';
-import { NavigationContainer, NavigationContainerRef, useNavigationContainerRef } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  NavigationContainerRef,
+  useNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Message } from '@marketplace/shared';
 import { RootStackParamList } from './types';
@@ -8,7 +12,7 @@ import MainNavigator from './MainNavigator';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import { useSavedStore } from '../store/savedStore';
-import { connectSocket, disconnectSocket, getSocket } from '../lib/socket';
+import { connectSocket, disconnectSocket } from '../lib/socket';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,22 +39,20 @@ export default function RootNavigator(): React.JSX.Element {
   // display name before they can use the app (email-prefix name detected).
   const needsSetup = isAuthenticated && user?.needsDisplayNameSetup === true;
 
+  // Manages the socket connection lifecycle AND attaches the global new_message
+  // listener in one effect so the listener is always bound to the live socket
+  // instance returned by connectSocket (eliminating the race where a second
+  // effect called getSocket() before connectSocket had run).
   useEffect(() => {
-    if (isAuthenticated && token && token !== 'dev-token') {
-      connectSocket(token);
-      useSavedStore.getState().fetchSavedIds();
-    } else {
+    if (!isAuthenticated || !token || token === 'dev-token') {
       disconnectSocket();
       useSavedStore.getState().clear();
+      return;
     }
-  }, [isAuthenticated, token]);
 
-  // Global socket listener: increment unread count for messages arriving outside the active chat
-  useEffect(() => {
-    if (!isAuthenticated || !token) return;
-
-    const socket = getSocket();
-    if (!socket) return;
+    // connectSocket is synchronous — returns (or reuses) the live socket.
+    const socket = connectSocket(token);
+    void useSavedStore.getState().fetchSavedIds();
 
     function handleGlobalNewMessage(message: Message) {
       const { activeConversationId, incrementUnread, updateConversationLastMessage } =
@@ -71,6 +73,9 @@ export default function RootNavigator(): React.JSX.Element {
 
     return () => {
       socket.off('new_message', handleGlobalNewMessage);
+      // Do NOT disconnect here — the socket must persist across re-renders
+      // triggered by token refresh. Disconnect happens only when
+      // isAuthenticated becomes false (handled on next effect run above).
     };
   }, [isAuthenticated, token]);
 

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +22,7 @@ import { api, usersApi } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { ProfileStackScreenProps } from '../../navigation/types';
+import ScreenHeader from '../../components/ScreenHeader';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ type AvailabilityState = 'idle' | 'checking' | 'available' | 'unavailable';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function EditProfileScreen({ navigation }: Props): React.JSX.Element {
+  const isMounted = useIsMounted();
   const { user, updateUser } = useAuthStore();
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
@@ -153,6 +156,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
       debounceTimer.current = setTimeout(async () => {
         try {
           const { data } = await usersApi.checkDisplayName(trimmed);
+          if (!isMounted()) return;
           if (data.available) {
             setAvailabilityState('available');
             setDisplayNameError(null);
@@ -173,6 +177,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
             }
           }
         } catch {
+          if (!isMounted()) return;
           setAvailabilityState('idle');
         }
       }, 300);
@@ -221,6 +226,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
       if (nameChanged) {
         try {
           const { data: checkData } = await usersApi.checkDisplayName(trimmedName);
+          if (!isMounted()) return;
           if (!checkData.available) {
             setDisplayNameError(
               checkData.reason === 'taken'
@@ -241,8 +247,10 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
       if (isLocalUri && avatarUri) {
         try {
           const { data: avatarData } = await usersApi.uploadAvatar(avatarUri);
+          if (!isMounted()) return;
           updateUser(avatarData.user);
         } catch {
+          if (!isMounted()) return;
           setApiError('Could not upload profile photo. Please try again.');
           setSaving(false);
           return;
@@ -258,7 +266,9 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
       if (Object.keys(patchBody).length > 0) {
         try {
           await api.updateMe(patchBody);
+          if (!isMounted()) return;
         } catch (err: unknown) {
+          if (!isMounted()) return;
           if (axios.isAxiosError(err)) {
             const status = err.response?.status;
             const code = err.response?.data?.error?.code ?? err.response?.data?.code;
@@ -275,6 +285,7 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
         }
       }
 
+      if (!isMounted()) return;
       // Optimistically update in-memory store with text changes
       updateUser({
         displayName: trimmedName,
@@ -283,18 +294,19 @@ export default function EditProfileScreen({ navigation }: Props): React.JSX.Elem
 
       navigation.goBack();
     } finally {
-      setSaving(false);
+      if (isMounted()) setSaving(false);
     }
-  }, [displayName, avatarUri, bio, navigation, updateUser, user, availabilityState]);
+  }, [isMounted, displayName, avatarUri, bio, navigation, updateUser, user, availabilityState]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <ScreenHeader title="Edit Profile" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 44 : 0}
       >
         <ScrollView
           style={styles.flex}

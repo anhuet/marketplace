@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   ActivityIndicator,
   Alert,
@@ -26,8 +27,51 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
 } from 'expo-audio';
-import MapView, { Marker } from 'react-native-maps';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+// react-native-maps 1.20.1 does not ship a codegenConfig so it runs through the
+// New Arch interop layer. The interop layer supports it on both platforms but
+// rendering edge-cases are possible. We lazy-import and render defensively:
+// the MapView is only mounted when GPS coordinates are available, and a
+// MapViewErrorBoundary catches any Fabric render errors so a crash here cannot
+// take down the entire PostListingScreen.
+let MapView: React.ComponentType<
+  React.ComponentProps<typeof import('react-native-maps').default>
+> | null = null;
+let Marker: React.ComponentType<
+  React.ComponentProps<typeof import('react-native-maps').Marker>
+> | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+  const RNMaps = require('react-native-maps') as typeof import('react-native-maps');
+  MapView = RNMaps.default;
+  Marker = RNMaps.Marker;
+} catch {
+  // Maps library failed to load — will fall back to coordinate text display
+}
+
+interface MapViewBoundaryState {
+  hasError: boolean;
+}
+class MapViewErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  MapViewBoundaryState
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(): MapViewBoundaryState {
+    return { hasError: true };
+  }
+  componentDidCatch(err: unknown): void {
+    // eslint-disable-next-line no-console
+    console.error('[MapViewErrorBoundary] MapView render error:', err);
+  }
+  render(): React.ReactNode {
+    return this.state.hasError ? this.props.fallback : this.props.children;
+  }
+}
 
 import { api } from '../../lib/api';
 import { toJpegLocalPhoto, type LocalPhoto } from '../../lib/imagePipeline';
@@ -97,6 +141,7 @@ type ListingFormValues = z.infer<typeof listingSchema>;
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PostListingScreen({ route, navigation }: Props): React.JSX.Element {
+  const isMounted = useIsMounted();
   const { user, updateUser } = useAuthStore();
   const listingId = route?.params?.listingId;
   const isEditMode = Boolean(listingId);
@@ -223,6 +268,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     setGpsError(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
+      if (!isMounted()) return;
       if (status !== 'granted') {
         setGpsError('Location permission denied. Please enable it in Settings.');
         return;
@@ -230,16 +276,17 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+      if (!isMounted()) return;
       setGps({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       });
     } catch {
-      setGpsError('Unable to get location. Please try again.');
+      if (isMounted()) setGpsError('Unable to get location. Please try again.');
     } finally {
-      setGpsLoading(false);
+      if (isMounted()) setGpsLoading(false);
     }
-  }, []);
+  }, [isMounted]);
 
   useEffect(() => {
     // In edit mode, GPS comes from the existing listing — never override it
@@ -391,6 +438,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         } as unknown as Blob);
       });
       const res = await api.addListingImages(listingId, formData);
+      if (!isMounted()) return;
       const uploaded: RemotePhoto[] = res.data.images.map((img) => ({
         kind: 'remote',
         id: img.id,
@@ -398,9 +446,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       }));
       setPhotos((prev) => [...prev, ...uploaded].slice(0, MAX_PHOTOS));
     } catch {
-      Alert.alert('Upload Failed', 'Could not upload the photo(s). Please try again.');
+      if (isMounted()) Alert.alert('Upload Failed', 'Could not upload the photo(s). Please try again.');
     } finally {
-      setUploadingPhoto(false);
+      if (isMounted()) setUploadingPhoto(false);
     }
   };
 
@@ -422,8 +470,10 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     if (!result.canceled && result.assets.length > 0) {
       try {
         const locals = await Promise.all(result.assets.map((a, i) => toJpeg(a, i)));
+        if (!isMounted()) return;
         await appendPhotos(locals);
       } catch {
+        if (!isMounted()) return;
         setPhotosError('Could not process one of the selected photos. Please try again.');
       }
     }
@@ -470,8 +520,10 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
             setDeletingPhotoId(photo.id);
             try {
               await api.deleteListingImage(listingId!, photo.id);
+              if (!isMounted()) return;
               setPhotos((prev) => prev.filter((_, i) => i !== index));
             } catch (err: unknown) {
+              if (!isMounted()) return;
               const status = (err as { response?: { status?: number } })?.response?.status;
               if (status === 422) {
                 Alert.alert(
@@ -482,7 +534,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
                 Alert.alert('Error', 'Could not remove the photo. Please try again.');
               }
             } finally {
-              setDeletingPhotoId(null);
+              if (isMounted()) setDeletingPhotoId(null);
             }
           },
         },
@@ -508,6 +560,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     setVoiceError(null);
     try {
       const perm = await requestRecordingPermissionsAsync();
+      if (!isMounted()) return;
       if (!perm.granted) {
         setVoiceError('Microphone permission is required. Please enable it in Settings.');
         return;
@@ -517,9 +570,12 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         allowsRecording: true,
         playsInSilentMode: true,
       });
+      if (!isMounted()) return;
       await audioRecorder.prepareToRecordAsync();
+      if (!isMounted()) return;
       audioRecorder.record();
     } catch {
+      if (!isMounted()) return;
       setVoiceError('Could not start the recording. Please try again.');
     }
   };
@@ -528,10 +584,12 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     try {
       await audioRecorder.stop();
     } catch {
+      if (!isMounted()) return;
       setVoiceError('Could not stop the recording. Please try again.');
       return;
     }
 
+    if (!isMounted()) return;
     const uri = audioRecorder.uri;
     if (!uri) {
       setVoiceError('No recording captured. Please try again.');
@@ -556,6 +614,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       } as unknown as Blob);
 
       const res = await api.parseVoiceListing(formData);
+      if (!isMounted()) return;
       const parsed = res.data;
 
       if (parsed.title) setValue('title', parsed.title, { shouldValidate: true });
@@ -572,13 +631,14 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         }
       }
     } catch (err: unknown) {
+      if (!isMounted()) return;
       const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
       setVoiceError(
         axiosErr?.response?.data?.error?.message ??
           'Voice parsing failed. Please try again or fill the fields manually.',
       );
     } finally {
-      setVoiceProcessing(false);
+      if (isMounted()) setVoiceProcessing(false);
     }
   };
 
@@ -619,6 +679,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
           condition: values.condition,
           categoryId: values.categoryId,
         });
+        if (!isMounted()) return;
         Alert.alert('Success', 'Your listing has been updated.', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
@@ -644,6 +705,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         });
 
         await api.createListing(formData);
+        if (!isMounted()) return;
         reset();
         setPhotos([]);
         setLocationAddress(null);
@@ -652,6 +714,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         ]);
       }
     } catch (err: unknown) {
+      if (!isMounted()) return;
       const axiosErr = err as { response?: { data?: { error?: { message?: string } }; status?: number } };
       const serverMsg = axiosErr?.response?.data?.error?.message;
       const status = axiosErr?.response?.status;
@@ -661,7 +724,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
           : 'Something went wrong. Please check your connection and try again.',
       );
     } finally {
-      setSubmitting(false);
+      if (isMounted()) setSubmitting(false);
     }
   };
 
@@ -1003,22 +1066,40 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
               accessibilityRole="image"
               accessibilityLabel="Listing location (read-only)"
             >
-              <MapView
-                style={styles.mapPreview}
-                region={{
-                  latitude: gps.latitude,
-                  longitude: gps.longitude,
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                rotateEnabled={false}
-                pitchEnabled={false}
-                pointerEvents="none"
-              >
-                <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
-              </MapView>
+              {MapView && Marker ? (
+                <MapViewErrorBoundary
+                  fallback={
+                    <View style={[styles.mapPreview, styles.mapFallback]}>
+                      <Text style={styles.mapFallbackText}>
+                        {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                      </Text>
+                    </View>
+                  }
+                >
+                  <MapView
+                    style={styles.mapPreview}
+                    region={{
+                      latitude: gps.latitude,
+                      longitude: gps.longitude,
+                      latitudeDelta: 0.005,
+                      longitudeDelta: 0.005,
+                    }}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    pointerEvents="none"
+                  >
+                    <Marker coordinate={{ latitude: gps.latitude, longitude: gps.longitude }} />
+                  </MapView>
+                </MapViewErrorBoundary>
+              ) : (
+                <View style={[styles.mapPreview, styles.mapFallback]}>
+                  <Text style={styles.mapFallbackText}>
+                    {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                  </Text>
+                </View>
+              )}
               <View style={styles.mapOverlayRow}>
                 <View style={styles.mapAddressContainer}>
                   <Text style={styles.mapAddressText} numberOfLines={1}>
@@ -1276,6 +1357,17 @@ const styles = StyleSheet.create({
   mapPreview: {
     height: 160,
     width: '100%',
+  },
+  mapFallback: {
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapFallbackText: {
+    ...typography.label,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.base,
   },
   mapOverlayRow: {
     flexDirection: 'row',

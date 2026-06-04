@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   ActivityIndicator,
   Alert,
@@ -45,6 +46,7 @@ function formatDate(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen({ navigation }: Props): React.JSX.Element {
+  const isMounted = useIsMounted();
   const { user, pushToken } = useAuthStore();
 
   // Reviews
@@ -77,18 +79,22 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
       }
       try {
         const res = await api.getUserReviews(user.id, page);
-        const data = res.data;
-        setReviews((prev) => (append ? [...prev, ...data.reviews] : data.reviews));
-        setReviewsHasMore(data.hasMore ?? false);
-        setReviewsPage(page);
+        if (isMounted()) {
+          const data = res.data;
+          setReviews((prev) => (append ? [...prev, ...data.reviews] : data.reviews));
+          setReviewsHasMore(data.hasMore ?? false);
+          setReviewsPage(page);
+        }
       } catch {
-        if (page === 1) setReviewsError('Could not load reviews.');
+        if (isMounted() && page === 1) setReviewsError('Could not load reviews.');
       } finally {
-        setReviewsLoading(false);
-        setReviewsLoadingMore(false);
+        if (isMounted()) {
+          setReviewsLoading(false);
+          setReviewsLoadingMore(false);
+        }
       }
     },
-    [user?.id],
+    [isMounted, user?.id],
   );
 
   const inviteCodeRef = useRef<string | null>(null);
@@ -98,13 +104,13 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
     setInviteLoading(true);
     try {
       const res = await api.getMyInviteCode();
-      setInviteCode(res.data.code);
+      if (isMounted()) setInviteCode(res.data.code);
     } catch {
-      setInviteCode(null);
+      if (isMounted()) setInviteCode(null);
     } finally {
-      setInviteLoading(false);
+      if (isMounted()) setInviteLoading(false);
     }
-  }, []);
+  }, [isMounted]);
 
   useFocusEffect(
     useCallback(() => {
@@ -149,19 +155,20 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
       try {
         if (!enabled) {
           await api.deletePushToken(pushToken);
-          setPushEnabled(false);
+          if (isMounted()) setPushEnabled(false);
         } else {
           const platform: 'IOS' | 'ANDROID' = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
           await api.registerPushToken(pushToken, platform);
-          setPushEnabled(true);
+          if (isMounted()) setPushEnabled(true);
         }
       } catch {
-        Alert.alert('Error', 'Could not update notification preferences. Please try again.');
+        if (isMounted())
+          Alert.alert('Error', 'Could not update notification preferences. Please try again.');
       } finally {
-        setPushToggling(false);
+        if (isMounted()) setPushToggling(false);
       }
     },
-    [pushToken],
+    [isMounted, pushToken],
   );
 
   // ── Logout ───────────────────────────────────────────────────────────────

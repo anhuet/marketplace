@@ -61,7 +61,7 @@ function BrowseNavigator() {
       <BrowseStack.Screen
         name="WriteReview"
         component={WriteReviewScreen}
-        options={{ title: 'Write a Review' }}
+        options={{ headerShown: false }}
       />
     </BrowseStack.Navigator>
   );
@@ -73,7 +73,7 @@ function MessagesNavigator() {
       <MessagesStack.Screen
         name="Messages"
         component={ConversationListScreen}
-        options={{ title: 'Messages' }}
+        options={{ headerShown: false }}
       />
       <MessagesStack.Screen
         name="ChatThread"
@@ -134,12 +134,12 @@ function ProfileNavigator() {
       <ProfileStack.Screen
         name="EditProfile"
         component={EditProfileScreen}
-        options={{ title: 'Edit Profile' }}
+        options={{ headerShown: false }}
       />
       <ProfileStack.Screen
         name="ConversationList"
         component={ConversationListScreen}
-        options={{ title: 'Messages' }}
+        options={{ headerShown: false }}
       />
       <ProfileStack.Screen
         name="ChatThread"
@@ -149,12 +149,12 @@ function ProfileNavigator() {
       <ProfileStack.Screen
         name="MyListings"
         component={MyListingsScreen}
-        options={{ title: 'My Listings' }}
+        options={{ headerShown: false }}
       />
       <ProfileStack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{ title: 'Settings' }}
+        options={{ headerShown: false }}
       />
       <ProfileStack.Screen
         name="UserProfile"

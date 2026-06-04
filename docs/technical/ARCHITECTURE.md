@@ -162,13 +162,13 @@ Full token reference, component specs, and interaction patterns: [`docs/content/
 
 ## Mobile Architecture
 
-> Owner: @react-native-developer — Last updated: 2026-05-27
+> Owner: @react-native-developer — Last updated: 2026-06-04
 
 ### Directory Structure
 
 ```
 apps/mobile/
-  App.tsx                          # Entry point — GestureHandlerRootView + SafeAreaProvider + RootNavigator
+  App.tsx                          # Entry point — GestureHandlerRootView + SafeAreaProvider + AppErrorBoundary + RootNavigator
   src/
     lib/
       api.ts                       # Axios instance + typed API functions (authApi, listingsApi, conversationsApi, …)
@@ -189,6 +189,12 @@ apps/mobile/
     store/
       authStore.ts                 # Zustand store — user, token, isAuthenticated; persisted via AsyncStorage
       chatStore.ts                 # Zustand store — conversations, messages, unreadCount
+    components/
+      AppErrorBoundary.tsx         # Class component error boundary — catches JS render errors, shows Vietnamese retry screen, logs via console.error
+      ScreenHeader.tsx             # Shared custom header bar (title + back button) — replaces native UINavigationBar for iOS 26 safety
+    hooks/
+      useIsMounted.ts              # Returns a () => boolean callback; guards setState calls after awaits on unmounted screens
+      usePushNotifications.ts      # Expo push token registration and foreground notification routing
     theme/
       tokens.ts                    # Design tokens: colors, spacing, radius, typography
 ```
@@ -204,7 +210,15 @@ All navigator screens are fully typed via `RootStackParamList`, `AuthStackParamL
 
 ChatThreadScreen is reachable from the Browse stack (via ListingDetail → "Message Seller"), the Messages stack (from ConversationList), and the Profile stack (via ConversationList). Each stack hosts its own instance of the component.
 
-**iOS 26 UINavigationBar workaround**: iOS 26 redesigned `UINavigationBar` internals (`_UINavigationBarVisualProviderModernIOSSwift`); the UIAppearance proxy aborts resolving IMPs for Swift-generated ObjC selectors when a native header is visible during a push transition. The three highest-traffic child screens — `ListingDetailScreen`, `UserProfileScreen`, and `ChatThreadScreen` — are registered with `headerShown: false` in every stack that hosts them, and each renders its own custom in-screen header bar using `useSafeAreaInsets()`. `ListingDetailScreen` overlays a translucent back button on the photo carousel; `UserProfileScreen` renders a full-width header row with a back control and the seller display name; `ChatThreadScreen` renders a header row with a back control and the existing `ChatHeaderTitle` component. The `ChatHeaderTitle` import was removed from `MainNavigator.tsx` and is now imported directly by `ChatThreadScreen`. Screens with lower traffic (`EditProfile`, `MyListings`, `Settings`, `WriteReview`, `ConversationList`) still use native headers and will be migrated if they produce crashes.
+**New Architecture (Fabric)**: `newArchEnabled: true` is set in `app.json`, `ios/Podfile.properties.json`, and `android/gradle.properties`. Fabric replaces the legacy RCTUIManager renderer, eliminating the `_purgeChildren / conformsToProtocol` SIGABRT crash class at the root. **react-native-maps 1.20.1** does not ship a `codegenConfig` and therefore runs via the New Arch interop layer; the `MapView` in `PostListingScreen` is wrapped in a `MapViewErrorBoundary` class component and lazy-loaded via `require()` at module scope, so a Fabric interop failure there cannot crash the screen.
+
+**Error boundary**: `AppErrorBoundary` (class component) wraps `RootNavigator` inside `SafeAreaProvider` in `App.tsx`. It catches unhandled JS render errors and shows a Vietnamese "Thử lại" recovery screen. Errors are logged via `console.error` (the only approved production logger in this project).
+
+**Mount guards**: All screens that call `setState` after `await` use the `useIsMounted()` hook from `src/hooks/useIsMounted.ts`. Guards are applied as `if (isMounted()) setState(...)` — never `return` from `finally` blocks (the `no-unsafe-finally` ESLint rule is respected).
+
+**Socket lifecycle**: `RootNavigator` manages the socket and the global `new_message` listener in a single merged `useEffect` keyed on `[isAuthenticated, token]`, so the listener always attaches to the live socket returned by `connectSocket()`.
+
+**iOS 26 UINavigationBar workaround**: iOS 26 redesigned `UINavigationBar` internals (`_UINavigationBarVisualProviderModernIOSSwift`); the UIAppearance proxy aborts resolving IMPs for Swift-generated ObjC selectors when a native header is visible during a push transition. All child screens now use `headerShown: false` and render a shared `ScreenHeader` component (back button + title, uses `useSafeAreaInsets()`). Fully migrated screens: `ListingDetailScreen`, `UserProfileScreen`, `ChatThreadScreen`, `EditProfileScreen`, `MyListingsScreen`, `SettingsScreen`, `WriteReviewScreen`, `ConversationListScreen`. The custom-header approach also acts as belt-and-suspenders under New Architecture since the interop layer does not change UINavigationBar behaviour on iOS 26.
 
 ### State Management
 
@@ -229,6 +243,8 @@ Named API groups (`authApi`, `invitesApi`, `listingsApi`, `conversationsApi`, `r
 | Component | Path | Description |
 |-----------|------|-------------|
 | `InviteCodeInput` | `src/components/InviteCodeInput.tsx` | Renders a fixed `MKT-` prefix label alongside an editable region that auto-uppercases, strips non-alphanumeric chars, and auto-inserts a dash after the 4th character. Internal state holds the 9-char body (`XXXX-XXXX`); the `onChangeValue` callback always returns the full `MKT-XXXX-XXXX` wire format ready for the API. |
+| `AppErrorBoundary` | `src/components/AppErrorBoundary.tsx` | Class component error boundary wrapping `RootNavigator`. Catches unhandled JS render errors, shows a Vietnamese "Thử lại" recovery screen, logs via `console.error`. |
+| `ScreenHeader` | `src/components/ScreenHeader.tsx` | Custom in-screen header bar (title + optional back button + right slot). Used by all screens migrated off native UINavigationBar for iOS 26 safety. Respects safe-area insets. |
 
 ### Voice Fill (PostListingScreen)
 
