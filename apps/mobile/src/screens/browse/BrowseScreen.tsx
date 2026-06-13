@@ -513,12 +513,21 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
   // effect doesn't fire prematurely on first mount before any location is known.
   const initialLoadDoneRef = useRef(false);
 
+  // Keep a ref to the latest loadInitial so the focus effect can call the most
+  // recent version WITHOUT depending on its identity. loadInitial changes
+  // identity whenever lastKnownLocation/filters change, and because it WRITES
+  // lastKnownLocation, depending on it directly makes useFocusEffect re-run on
+  // every fetch — an infinite refresh loop. Depending on [] runs the load once
+  // per focus, which is the intended behaviour.
+  const loadInitialRef = useRef(loadInitial);
+  loadInitialRef.current = loadInitial;
+
   useFocusEffect(
     useCallback(() => {
-      loadInitial(false).then(() => {
+      void loadInitialRef.current(false).then(() => {
         initialLoadDoneRef.current = true;
       });
-    }, [loadInitial]),
+    }, []),
   );
 
   // Reload on filter change — only after the first focus-load has completed
