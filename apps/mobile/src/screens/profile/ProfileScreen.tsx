@@ -20,6 +20,7 @@ import * as Clipboard from 'expo-clipboard';
 import { api } from '../../lib/api';
 import { logout } from '../../lib/auth';
 import { useAuthStore } from '../../store/authStore';
+import type { User } from '@marketplace/shared';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import StarRating from '../../components/StarRating';
 import type { ProfileStackScreenProps } from '../../navigation/types';
@@ -47,7 +48,7 @@ function formatDate(iso: string): string {
 
 export default function ProfileScreen({ navigation }: Props): React.JSX.Element {
   const isMounted = useIsMounted();
-  const { user, pushToken } = useAuthStore();
+  const { user, updateUser, pushToken } = useAuthStore();
 
   // Reviews
   const [reviews, setReviews] = useState<ReviewWithDetails[]>([]);
@@ -121,7 +122,29 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
         loadInviteCode();
       }
       loadReviews(1);
-    }, [loadReviews, loadInviteCode]),
+
+      // Refresh the current user's rating so averageRating/ratingCount are live.
+      // The authStore user is only set at login; without this refresh the profile
+      // shows "No reviews yet" even after a review has been submitted.
+      async function refreshRating() {
+        if (!user?.id) {
+          return;
+        }
+        try {
+          const res = await api.getUserRating(user.id);
+          if (isMounted()) {
+            updateUser({
+              averageRating: (res.data as { averageRating: number; ratingCount: number })
+                .averageRating,
+              ratingCount: (res.data as { averageRating: number; ratingCount: number }).ratingCount,
+            } as Partial<User>);
+          }
+        } catch {
+          // Non-fatal — cached value shown as fallback
+        }
+      }
+      refreshRating();
+    }, [loadReviews, loadInviteCode, user?.id, isMounted, updateUser]),
   );
 
   // ── Invite copy ──────────────────────────────────────────────────────────
@@ -220,9 +243,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
           </View>
           <StarRating rating={item.rating} size={14} showNumeric={false} />
         </View>
-        {item.comment ? (
-          <Text style={styles.reviewComment}>{item.comment}</Text>
-        ) : null}
+        {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
       </View>
     ),
     [],
@@ -243,7 +264,14 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
           accessibilityHint="Opens the edit profile screen to update your avatar"
         >
           {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" accessibilityLabel="Your profile photo" />
+            <Image
+              source={{ uri: avatarUri }}
+              style={styles.avatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+              accessibilityLabel="Your profile photo"
+            />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarFallbackText}>
@@ -251,7 +279,11 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
               </Text>
             </View>
           )}
-          <View style={styles.editAvatarBadge} accessibilityElementsHidden importantForAccessibility="no">
+          <View
+            style={styles.editAvatarBadge}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          >
             <Text style={styles.editAvatarIcon}>✎</Text>
           </View>
         </TouchableOpacity>
@@ -287,7 +319,11 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
           <ActivityIndicator size="small" color={colors.primaryDark} style={styles.inlineLoader} />
         ) : inviteCode ? (
           <View style={styles.inviteCodeRow}>
-            <Text style={styles.inviteCodeText} selectable accessibilityLabel={`Invite code: ${inviteCode}`}>
+            <Text
+              style={styles.inviteCodeText}
+              selectable
+              accessibilityLabel={`Invite code: ${inviteCode}`}
+            >
               {inviteCode}
             </Text>
             <TouchableOpacity
@@ -386,7 +422,9 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
         <View style={styles.settingRow}>
           <View style={styles.settingLabel}>
             <Text style={styles.settingName}>Push Notifications</Text>
-            <Text style={styles.settingDescription}>Receive alerts for new messages and offers</Text>
+            <Text style={styles.settingDescription}>
+              Receive alerts for new messages and offers
+            </Text>
           </View>
           <Switch
             value={pushEnabled}
@@ -416,7 +454,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
   // ── Main render ─────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <FlatList
         data={[]}
         keyExtractor={() => ''}
@@ -442,7 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.md,
   },
 
   // Profile header

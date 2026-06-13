@@ -19,6 +19,7 @@ export type BrowseStackParamList = {
   ChatThread: {
     conversationId: string;
     listingTitle: string;
+    listingImageUrl?: string | null;
     otherUserName?: string;
     otherUserAvatarUrl?: string | null;
   };
@@ -37,6 +38,7 @@ export type MessagesStackParamList = {
   ChatThread: {
     conversationId: string;
     listingTitle: string;
+    listingImageUrl?: string | null;
     otherUserName?: string;
     otherUserAvatarUrl?: string | null;
   };
@@ -67,6 +69,7 @@ export type ProfileStackParamList = {
   ChatThread: {
     conversationId: string;
     listingTitle: string;
+    listingImageUrl?: string | null;
     otherUserName?: string;
     otherUserAvatarUrl?: string | null;
   };

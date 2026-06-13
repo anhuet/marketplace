@@ -7,8 +7,9 @@ export async function saveListing(userId: string, listingId: string) {
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
   if (!listing || listing.status === 'DELETED') throw new Error('NOT_FOUND');
 
+  let savedRecord;
   try {
-    return await prisma.savedListing.create({
+    savedRecord = await prisma.savedListing.create({
       data: { userId, listingId },
     });
   } catch (err: unknown) {
@@ -22,6 +23,17 @@ export async function saveListing(userId: string, listingId: string) {
     }
     throw err;
   }
+
+  // Fire-and-forget: notify the seller that their listing was saved.
+  // Guard is also enforced inside sendListingSavedNotification, but we skip
+  // the import entirely when the saver is the seller to avoid unnecessary work.
+  if (userId !== listing.sellerId) {
+    import('./pushService').then(({ sendListingSavedNotification }) => {
+      void sendListingSavedNotification(listingId, userId);
+    });
+  }
+
+  return savedRecord;
 }
 
 export async function unsaveListing(userId: string, listingId: string) {

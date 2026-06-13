@@ -35,7 +35,13 @@ type NotificationPayload = {
 
 /**
  * Navigates to the appropriate screen based on the notification payload.
- * Routes into the ProfileTab stack so that ConversationList sits behind ChatThread in the back stack.
+ *
+ * Chat notifications (new_message, new_inquiry with a conversationId) route into
+ * MessagesTab so ChatThread is pushed onto the Messages stack — not the Profile
+ * stack. Routing into ProfileTab was the root cause of bug 1.2.090: switching to
+ * the Profile tab after receiving a chat notification showed a stale ChatThread
+ * underneath the Profile root because the Profile stack had accumulated pushed
+ * screens from the notification handler.
  */
 function handleNotificationNavigation(
   navigationRef: React.RefObject<NavigationContainerRef<RootStackParamList> | null>,
@@ -51,7 +57,7 @@ function handleNotificationNavigation(
 
   if (data.type === 'new_message' && data.conversationId) {
     navigate('Main', {
-      screen: 'ProfileTab',
+      screen: 'MessagesTab',
       params: {
         screen: 'ChatThread',
         params: {
@@ -66,7 +72,7 @@ function handleNotificationNavigation(
   if (data.type === 'new_inquiry') {
     if (data.conversationId) {
       navigate('Main', {
-        screen: 'ProfileTab',
+        screen: 'MessagesTab',
         params: {
           screen: 'ChatThread',
           params: {
@@ -77,8 +83,8 @@ function handleNotificationNavigation(
       });
     } else {
       navigate('Main', {
-        screen: 'ProfileTab',
-        params: { screen: 'ConversationList' },
+        screen: 'MessagesTab',
+        params: { screen: 'Messages' },
       });
     }
     return;
@@ -95,6 +101,12 @@ function handleNotificationNavigation(
 /**
  * Registers an Android notification channel required for Android 8+ (API 26+).
  * Safe to call on iOS — the SDK no-ops on non-Android platforms.
+ *
+ * Importance is set to MAX so heads-up notifications appear on Android 8+.
+ * lockscreenVisibility is set to PUBLIC so notification content is visible on the
+ * lock screen without requiring the device to be unlocked (fixes bug 1.2.110).
+ * This channel must be created before any notifications are displayed; it is
+ * called at the start of setup() before the push token is obtained.
  */
 async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') {
@@ -102,9 +114,12 @@ async function ensureAndroidChannel(): Promise<void> {
   }
   await Notifications.setNotificationChannelAsync('default', {
     name: 'Default',
-    importance: Notifications.AndroidImportance.HIGH,
+    importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
+    enableVibrate: true,
     lightColor: '#A2C2E1',
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    showBadge: true,
   });
 }
 

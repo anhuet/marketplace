@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -20,6 +21,7 @@ import { api } from '../../lib/api';
 import { getSocket, joinConversationRoom } from '../../lib/socket';
 import { useChatStore, PendingMessage } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import { BrowseStackParamList, ProfileStackParamList } from '../../navigation/types';
 import { colors, spacing, radius, typography } from '../../theme/tokens';
 import ChatHeaderTitle from '../../navigation/ChatHeaderTitle';
@@ -33,6 +35,31 @@ type ChatThreadRoute = BrowseChatRoute | ProfileChatRoute;
 
 type AnyNavigation = NativeStackNavigationProp<BrowseStackParamList & ProfileStackParamList>;
 
+// Raw conversation shape returned by GET /api/v1/conversations
+interface RawConversation {
+  id: string;
+  listingId: string;
+  buyerId: string;
+  listing: {
+    id: string;
+    title: string;
+    status: string;
+    sellerId: string;
+    images: Array<{ id: string; url: string; order: number }>;
+    seller?: { id: string; displayName: string; avatarUrl: string | null };
+  };
+  buyer: { id: string; displayName: string; avatarUrl: string | null };
+  messages: Array<{
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    readAt: string | null;
+    createdAt: string;
+  }>;
+  unreadCount: number;
+}
+
 // Unique ID generator for optimistic messages
 function generateTempId(): string {
   return `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -43,18 +70,114 @@ function formatMessageTime(iso: string): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// ─── Listing Banner ───────────────────────────────────────────────────────────
+
+interface ListingBannerProps {
+  listingTitle: string;
+  listingImageUrl?: string | null;
+}
+
+function ListingBanner({ listingTitle, listingImageUrl }: ListingBannerProps): React.JSX.Element {
+  return (
+    <View style={bannerStyles.container} accessibilityLabel={`Item: ${listingTitle}`}>
+      {listingImageUrl ? (
+        <Image
+          source={{ uri: listingImageUrl }}
+          style={bannerStyles.image}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+          accessibilityLabel={`Cover photo for ${listingTitle}`}
+        />
+      ) : (
+        <View style={[bannerStyles.image, bannerStyles.imagePlaceholder]}>
+          <Ionicons name="image-outline" size={20} color={colors.textSecondary} />
+        </View>
+      )}
+      <Text style={bannerStyles.title} numberOfLines={2}>
+        {listingTitle}
+      </Text>
+    </View>
+  );
+}
+
+const bannerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  image: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.sm,
+  },
+  imagePlaceholder: {
+    backgroundColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    ...typography.label,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+});
+
+// ─── Message Bubble ───────────────────────────────────────────────────────────
+
 interface MessageBubbleProps {
   message: PendingMessage;
   isOwn: boolean;
+  otherUserAvatarUrl?: string | null;
+  otherUserName?: string;
 }
 
-function MessageBubble({ message, isOwn }: MessageBubbleProps): React.JSX.Element {
+function MessageBubble({
+  message,
+  isOwn,
+  otherUserAvatarUrl,
+  otherUserName,
+}: MessageBubbleProps): React.JSX.Element {
+  const AVATAR_SIZE = 28;
+  const displayName = otherUserName ?? 'Other';
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
     <View
       style={[styles.bubbleWrapper, isOwn ? styles.bubbleWrapperOwn : styles.bubbleWrapperOther]}
       accessibilityRole="text"
-      accessibilityLabel={`${isOwn ? 'You' : 'Other'}: ${message.content}`}
+      accessibilityLabel={`${isOwn ? 'You' : displayName}: ${message.content}`}
     >
+      {/* Avatar beside incoming messages only */}
+      {!isOwn && (
+        <View style={[styles.bubbleAvatar, { width: AVATAR_SIZE, height: AVATAR_SIZE }]}>
+          {otherUserAvatarUrl ? (
+            <Image
+              source={{ uri: otherUserAvatarUrl }}
+              style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              accessibilityLabel={`${displayName}'s avatar`}
+            />
+          ) : (
+            <View
+              style={[
+                styles.bubbleAvatarFallback,
+                { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 },
+              ]}
+              accessibilityLabel={`${displayName}'s avatar`}
+            >
+              <Text style={styles.bubbleAvatarInitial}>{initial}</Text>
+            </View>
+          )}
+        </View>
+      )}
       <View
         style={[
           styles.bubble,
@@ -76,9 +199,13 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps): React.JSX.Elemen
           )}
         </View>
       </View>
+      {/* Spacer on the left for outgoing messages to mirror avatar width */}
+      {isOwn && <View style={{ width: AVATAR_SIZE + spacing.sm }} />}
     </View>
   );
 }
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ChatThreadScreen(): React.JSX.Element {
   const navigation = useNavigation<AnyNavigation>();
@@ -86,8 +213,24 @@ export default function ChatThreadScreen(): React.JSX.Element {
   const { conversationId } = route.params;
   const insets = useSafeAreaInsets();
 
-  // Route params needed for the in-screen header
-  const { listingTitle, otherUserName, otherUserAvatarUrl } = route.params;
+  // Route params needed for the in-screen header and listing banner.
+  // When opening from a push notification these may be undefined — we fetch them below.
+  const {
+    listingTitle: routeListingTitle,
+    listingImageUrl: routeListingImageUrl,
+    otherUserName: routeOtherUserName,
+    otherUserAvatarUrl: routeOtherUserAvatarUrl,
+  } = route.params;
+
+  // Display state — starts from route params, populated by fetch if needed
+  const [listingTitle, setListingTitle] = useState<string>(routeListingTitle ?? '');
+  const [listingImageUrl, setListingImageUrl] = useState<string | null | undefined>(
+    routeListingImageUrl,
+  );
+  const [otherUserName, setOtherUserName] = useState<string | undefined>(routeOtherUserName);
+  const [otherUserAvatarUrl, setOtherUserAvatarUrl] = useState<string | null | undefined>(
+    routeOtherUserAvatarUrl,
+  );
 
   const currentUser = useAuthStore((s) => s.user);
   const {
@@ -109,15 +252,7 @@ export default function ChatThreadScreen(): React.JSX.Element {
   const inputRef = useRef<TextInput>(null);
 
   // Mount guard — prevents setState after unmount (iOS 26 RCTUIManager teardown hardening).
-  // Guards handleSend: if the user navigates away while api.sendMessage is in-flight, the
-  // setSending(false) in the finally block would otherwise fire on an unmounted component.
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+  const isMounted = useIsMounted();
 
   // Mark this conversation as active so incoming socket messages don't increment unread
   useEffect(() => {
@@ -128,6 +263,50 @@ export default function ChatThreadScreen(): React.JSX.Element {
     };
   }, [conversationId, setActiveConversation, clearUnread]);
 
+  // Fetch missing display params — occurs when ChatThread is opened from a push notification
+  // which only provides conversationId + listingTitle. We call GET /conversations, find the
+  // matching entry, and populate otherUser + listing image from the response.
+  useEffect(() => {
+    const needsFetch = !routeOtherUserName || routeListingImageUrl === undefined;
+    if (!needsFetch) return;
+
+    let cancelled = false;
+
+    async function fetchDisplayParams() {
+      try {
+        const response = await api.getConversations();
+        if (cancelled) return;
+        const raw: RawConversation[] = (response.data as { conversations: RawConversation[] })
+          .conversations;
+        const match = raw.find((c) => c.id === conversationId);
+        if (!match) return;
+        if (!isMounted()) return;
+
+        // Determine which side the current user is on
+        const isBuyer = match.buyerId === currentUser?.id;
+        const name = isBuyer
+          ? (match.listing.seller?.displayName ?? 'Seller')
+          : match.buyer.displayName;
+        const avatarUrl = isBuyer
+          ? (match.listing.seller?.avatarUrl ?? null)
+          : match.buyer.avatarUrl;
+        const coverUrl = match.listing.images.find((img) => img.order === 0)?.url ?? null;
+
+        setListingTitle(match.listing.title);
+        setListingImageUrl(coverUrl);
+        setOtherUserName(name);
+        setOtherUserAvatarUrl(avatarUrl);
+      } catch {
+        // Non-fatal — header remains partially populated from route params
+      }
+    }
+
+    fetchDisplayParams();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, currentUser?.id, isMounted, routeOtherUserName, routeListingImageUrl]);
+
   // Fetch message history on mount
   useEffect(() => {
     let cancelled = false;
@@ -136,12 +315,11 @@ export default function ChatThreadScreen(): React.JSX.Element {
       setLoadingHistory(true);
       try {
         const response = await api.getMessages(conversationId);
-        if (!cancelled) {
-          const fetched: Message[] = (response.data as { messages: Message[] }).messages;
-          setMessages(conversationId, fetched);
-        }
+        if (cancelled) return;
+        const fetched: Message[] = (response.data as { messages: Message[] }).messages;
+        if (isMounted()) setMessages(conversationId, fetched);
       } finally {
-        if (!cancelled) setLoadingHistory(false);
+        if (!cancelled && isMounted()) setLoadingHistory(false);
       }
     }
 
@@ -149,7 +327,7 @@ export default function ChatThreadScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [conversationId, setMessages]);
+  }, [conversationId, isMounted, setMessages]);
 
   // Join the Socket.io room and register event listeners
   useEffect(() => {
@@ -199,21 +377,22 @@ export default function ChatThreadScreen(): React.JSX.Element {
 
     try {
       const response = await api.sendMessage(conversationId, content);
-      if (!isMountedRef.current) return;
+      if (!isMounted()) return;
       const confirmed: Message = (response.data as { message: Message }).message;
       replacePendingMessage(conversationId, tempId, confirmed);
       updateConversationLastMessage(conversationId, confirmed);
     } catch {
-      if (!isMountedRef.current) return;
+      if (!isMounted()) return;
       markMessageFailed(conversationId, tempId);
     } finally {
-      if (isMountedRef.current) setSending(false);
+      if (isMounted()) setSending(false);
     }
   }, [
     inputText,
     sending,
     conversationId,
     currentUser?.id,
+    isMounted,
     addMessage,
     updateConversationLastMessage,
     replacePendingMessage,
@@ -224,8 +403,9 @@ export default function ChatThreadScreen(): React.JSX.Element {
   // to render newest messages at the bottom.
   const invertedMessages = [...messages].reverse();
 
-  // Height of the custom header: paddingTop (insets.top) + inner height (spacing.sm * 2 + 44)
-  const customHeaderHeight = insets.top + spacing.sm * 2 + 44;
+  // Height of the custom header: status bar (insets.top) + inner row height (44) + paddingBottom (spacing.sm)
+  // This is the actual rendered height of the chatHeader View above the KeyboardAvoidingView.
+  const customHeaderHeight = insets.top + 44 + spacing.sm;
 
   // Stabilise renderItem and ListEmptyComponent with useCallback/useMemo so their references
   // don't change on every render. Inline function/object props on FlatList can cause the legacy
@@ -233,9 +413,14 @@ export default function ChatThreadScreen(): React.JSX.Element {
   // conformsToProtocol: SIGABRT when navigating away.
   const renderItem = useCallback(
     ({ item }: { item: PendingMessage }) => (
-      <MessageBubble message={item} isOwn={item.senderId === currentUser?.id} />
+      <MessageBubble
+        message={item}
+        isOwn={item.senderId === currentUser?.id}
+        otherUserAvatarUrl={otherUserAvatarUrl}
+        otherUserName={otherUserName}
+      />
     ),
-    [currentUser?.id],
+    [currentUser?.id, otherUserAvatarUrl, otherUserName],
   );
 
   const listEmptyComponent = useMemo(
@@ -268,6 +453,10 @@ export default function ChatThreadScreen(): React.JSX.Element {
           />
         </View>
       </View>
+
+      {/* Listing banner — item cover photo + title shown below the header */}
+      <ListingBanner listingTitle={listingTitle} listingImageUrl={listingImageUrl} />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -374,6 +563,7 @@ const styles = StyleSheet.create({
   bubbleWrapper: {
     marginVertical: spacing.xs / 2,
     flexDirection: 'row',
+    alignItems: 'flex-end',
   },
   bubbleWrapperOwn: {
     justifyContent: 'flex-end',
@@ -381,8 +571,22 @@ const styles = StyleSheet.create({
   bubbleWrapperOther: {
     justifyContent: 'flex-start',
   },
+  bubbleAvatar: {
+    marginRight: spacing.sm,
+    flexShrink: 0,
+  },
+  bubbleAvatarFallback: {
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleAvatarInitial: {
+    ...typography.caption,
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
   bubble: {
-    maxWidth: '75%',
+    maxWidth: '70%',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,

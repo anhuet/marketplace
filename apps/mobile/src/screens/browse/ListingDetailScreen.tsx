@@ -4,7 +4,9 @@ import {
   AlertButton,
   Dimensions,
   FlatList,
+  Modal,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -91,6 +93,182 @@ function ListingNotFound({ onBack }: { onBack: () => void }): React.JSX.Element 
   );
 }
 
+// ─── Full-Screen Image Viewer ────────────────────────────────────────────────
+
+interface ImageViewerProps {
+  images: { id: string; url: string; order: number }[];
+  initialIndex: number;
+  visible: boolean;
+  onClose: () => void;
+}
+
+function FullScreenImageViewer({
+  images,
+  initialIndex,
+  visible,
+  onClose,
+}: ImageViewerProps): React.JSX.Element {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const listRef = useRef<FlatList<{ id: string; url: string; order: number }>>(null);
+  const insets = useSafeAreaInsets();
+
+  // Reset to the tapped index each time the modal opens
+  useEffect(() => {
+    if (visible) {
+      setActiveIndex(initialIndex);
+      // Scroll to the tapped image after the list renders
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+      });
+    }
+  }, [visible, initialIndex]);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+      setActiveIndex(viewableItems[0].index);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <StatusBar hidden />
+      <View style={viewerStyles.backdrop}>
+        <FlatList
+          ref={listRef}
+          data={images}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          initialScrollIndex={initialIndex}
+          getItemLayout={(_data, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+          renderItem={({ item }) => (
+            <View style={viewerStyles.slide}>
+              <Image
+                source={{ uri: item.url }}
+                style={viewerStyles.image}
+                contentFit="contain"
+                transition={200}
+                cachePolicy="memory-disk"
+                accessibilityLabel="Listing photo full screen"
+              />
+            </View>
+          )}
+        />
+
+        {/* Dot indicators */}
+        {images.length > 1 && (
+          <View
+            style={[viewerStyles.dotRow, { bottom: insets.bottom + spacing.xl }]}
+            accessibilityLabel={`Photo ${activeIndex + 1} of ${images.length}`}
+          >
+            {images.map((img, i) => (
+              <View
+                key={img.id}
+                style={[
+                  viewerStyles.dot,
+                  i === activeIndex ? viewerStyles.dotActive : viewerStyles.dotInactive,
+                ]}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Close button */}
+        <TouchableOpacity
+          style={[viewerStyles.closeButton, { top: insets.top + spacing.sm }]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close image viewer"
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+        >
+          <Ionicons name="close" size={22} color={colors.surface} />
+        </TouchableOpacity>
+
+        {/* Image counter */}
+        <View style={[viewerStyles.counter, { top: insets.top + spacing.sm }]}>
+          <Text style={viewerStyles.counterText}>
+            {activeIndex + 1} / {images.length}
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const viewerStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+  },
+  slide: {
+    width: SCREEN_WIDTH,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  image: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+  },
+  dotRow: {
+    position: 'absolute',
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    backgroundColor: colors.surface,
+  },
+  dotInactive: {
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  closeButton: {
+    position: 'absolute',
+    left: spacing.md,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  counter: {
+    position: 'absolute',
+    right: spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  counterText: {
+    ...typography.caption,
+    color: colors.surface,
+    fontWeight: '600',
+  },
+});
+
 // ─── Photo Carousel ──────────────────────────────────────────────────────────
 
 interface CarouselProps {
@@ -99,6 +277,8 @@ interface CarouselProps {
 
 function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerStartIndex, setViewerStartIndex] = useState(0);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
@@ -111,6 +291,11 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
   // Stable sorted reference — prevents FlatList data prop from changing identity on every render,
   // which can destabilise RCTUIManager view references during teardown (iOS 26 hardening).
   const sorted = useMemo(() => [...images].sort((a, b) => a.order - b.order), [images]);
+
+  const handleImagePress = useCallback((index: number) => {
+    setViewerStartIndex(index);
+    setViewerVisible(true);
+  }, []);
 
   if (sorted.length === 0) {
     return (
@@ -131,8 +316,15 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         style={styles.carouselList}
-        renderItem={({ item }) => (
-          <View style={styles.carouselSlide}>
+        renderItem={({ item, index }) => (
+          <TouchableOpacity
+            style={styles.carouselSlide}
+            onPress={() => handleImagePress(index)}
+            activeOpacity={0.95}
+            accessibilityRole="button"
+            accessibilityLabel={`View photo ${index + 1} of ${sorted.length} full screen`}
+            accessibilityHint="Opens full-screen image viewer"
+          >
             <Image
               source={{ uri: item.url }}
               style={styles.carouselImage}
@@ -141,7 +333,7 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
               cachePolicy="memory-disk"
               accessibilityLabel="Listing photo"
             />
-          </View>
+          </TouchableOpacity>
         )}
         getItemLayout={(_data, index) => ({
           length: SCREEN_WIDTH,
@@ -162,6 +354,13 @@ function PhotoCarousel({ images }: CarouselProps): React.JSX.Element {
           ))}
         </View>
       )}
+
+      <FullScreenImageViewer
+        images={sorted}
+        initialIndex={viewerStartIndex}
+        visible={viewerVisible}
+        onClose={() => setViewerVisible(false)}
+      />
     </View>
   );
 }
@@ -268,9 +467,11 @@ export default function ListingDetailScreen({ route, navigation }: Props): React
       const response = await api.startConversation(listing.id);
       if (!isMountedRef.current) return;
       const conversation = (response.data as { conversation: { id: string } }).conversation;
+      const coverImageUrl = listing.images.find((img) => img.order === 0)?.url ?? null;
       navigation.navigate('ChatThread', {
         conversationId: conversation.id,
         listingTitle: listing.title,
+        listingImageUrl: coverImageUrl,
         otherUserName: listing.seller?.displayName,
         otherUserAvatarUrl: listing.seller?.avatarUrl ?? null,
       });

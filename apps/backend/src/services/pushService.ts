@@ -71,7 +71,6 @@ export async function sendNewMessageNotification(
     where: { id: conversationId },
     include: {
       listing: { select: { title: true, sellerId: true } },
-      buyer: { select: { id: true, displayName: true } },
     },
   });
   if (!conversation) return;
@@ -81,10 +80,12 @@ export async function sendNewMessageNotification(
       ? conversation.listing.sellerId
       : conversation.buyerId;
 
-  const senderName =
-    senderId === conversation.buyerId
-      ? (conversation.buyer.displayName ?? 'User')
-      : 'Seller';
+  // Always fetch the sender's current displayName from RDS (source of truth per ADR-008)
+  const senderUser = await prisma.user.findUnique({
+    where: { id: senderId },
+    select: { displayName: true },
+  });
+  const senderName = senderUser?.displayName ?? 'Someone';
 
   const preview =
     messageContent.length > 60 ? messageContent.slice(0, 57) + '...' : messageContent;
@@ -124,5 +125,29 @@ export async function sendNewInquiryNotification(
     title: 'New inquiry',
     body: `Someone is interested in "${listing.title}"`,
     data: { conversationId, listingId, type: 'new_inquiry' },
+  });
+}
+
+/**
+ * Notifies the listing seller when a buyer saves (favorites) their listing.
+ * Guard: callers must ensure saverId !== listing.sellerId before calling this.
+ */
+export async function sendListingSavedNotification(
+  listingId: string,
+  saverId: string,
+): Promise<void> {
+  const listing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    select: { title: true, sellerId: true },
+  });
+  if (!listing) return;
+
+  // Do not notify the seller if they saved their own listing
+  if (saverId === listing.sellerId) return;
+
+  await sendPushToUser(listing.sellerId, {
+    title: 'New interest',
+    body: `Someone saved "${listing.title}"`,
+    data: { listingId, type: 'new_inquiry' },
   });
 }

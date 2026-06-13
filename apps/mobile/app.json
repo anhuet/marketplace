@@ -28,10 +28,23 @@
       "adaptiveIcon": {
         "backgroundColor": "#F8F9FA"
       },
-      "package": "com.marketplace.app"
+      "package": "com.marketplace.app",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
     },
     "plugins": [
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "color": "#2D4B6B",
+          "defaultChannel": "default",
+          "androidMode": "default",
+          "androidCollapsedTitle": "#{unread_notifications} new notifications"
+        }
+      ],
       [
         "expo-location",
         {
