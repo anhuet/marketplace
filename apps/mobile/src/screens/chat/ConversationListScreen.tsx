@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   ActivityIndicator,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ConversationWithDetails, ListingStatus } from '@marketplace/shared';
 
@@ -121,9 +121,7 @@ function ConversationRow({
           />
         ) : (
           <View style={[styles.avatarOverlay, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarInitial}>
-              {participantLabel.charAt(0).toUpperCase()}
-            </Text>
+            <Text style={styles.avatarInitial}>{participantLabel.charAt(0).toUpperCase()}</Text>
           </View>
         )}
       </View>
@@ -164,11 +162,23 @@ function ConversationRow({
 
 export default function ConversationListScreen(): React.JSX.Element {
   const isMounted = useIsMounted();
-  const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList & MessagesStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<ProfileStackParamList & MessagesStackParamList>>();
   const currentUser = useAuthStore((s) => s.user);
   const { conversations, setConversations } = useChatStore();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Sort conversations by most recent activity (updatedAt). This is done at render time
+  // so that the global socket listener's updateConversationLastMessage calls (which mutate
+  // the Zustand store) automatically cause the list to re-sort without a full refetch.
+  const sortedConversations = React.useMemo(
+    () =>
+      [...conversations].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      ),
+    [conversations],
+  );
 
   const fetchConversations = useCallback(async () => {
     setLoading(true);
@@ -205,9 +215,12 @@ export default function ConversationListScreen(): React.JSX.Element {
     }
   }, [isMounted, setConversations]);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+  // Fetch fresh data whenever the screen regains focus (e.g. after navigating back from ChatThread)
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, [fetchConversations]),
+  );
 
   const handlePress = useCallback(
     (conversation: ConversationWithDetails) => {
@@ -219,9 +232,13 @@ export default function ConversationListScreen(): React.JSX.Element {
       const otherUserAvatarUrl = isBuyer
         ? (rawConv.listing.seller?.avatarUrl ?? null)
         : conversation.buyer.avatarUrl;
+      const coverImage = conversation.listing.images.find(
+        (img: { id: string; url: string; order: number }) => img.order === 0,
+      );
       navigation.navigate('ChatThread', {
         conversationId: conversation.id,
         listingTitle: conversation.listing.title,
+        listingImageUrl: coverImage?.url ?? null,
         otherUserName,
         otherUserAvatarUrl,
       });
@@ -263,7 +280,7 @@ export default function ConversationListScreen(): React.JSX.Element {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScreenHeader title="Messages" />
       <FlatList
-        data={conversations}
+        data={sortedConversations}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <ConversationRow
@@ -283,7 +300,7 @@ export default function ConversationListScreen(): React.JSX.Element {
             </Text>
           </View>
         }
-        contentContainerStyle={conversations.length === 0 ? styles.emptyList : undefined}
+        contentContainerStyle={sortedConversations.length === 0 ? styles.emptyList : undefined}
       />
     </SafeAreaView>
   );

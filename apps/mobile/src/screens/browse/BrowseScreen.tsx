@@ -413,21 +413,29 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
 
   const loadInitial = useCallback(
     async (refresh = false) => {
-      let coords = lastKnownLocation;
-      if (!coords) {
-        const acquired = await requestLocation();
-        if (!isMounted()) return;
-        if (!acquired) return;
-        coords = acquired;
-      }
+      // Always re-request fresh location on every loadInitial call so that:
+      //  (a) returning to the screen picks up a new position, and
+      //  (b) the first mount never silently skips fetching because the cache
+      //      was stale or empty.
       if (refresh) {
-        const fresh = await requestLocation();
-        if (!isMounted()) return;
-        if (fresh) coords = fresh;
         setIsRefreshing(true);
       } else {
         setIsLoading(true);
       }
+
+      // Request a fresh location; fall back to last-known if acquisition fails
+      // so the feed still shows something rather than staying empty.
+      const fresh = await requestLocation();
+      if (!isMounted()) return;
+      const coords = fresh ?? lastKnownLocation;
+
+      if (!coords) {
+        // No location available at all — stop the loading indicator and bail.
+        if (refresh) setIsRefreshing(false);
+        else setIsLoading(false);
+        return;
+      }
+
       await fetchListings({
         coords,
         pageNum: 1,
@@ -440,7 +448,15 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       if (refresh) setIsRefreshing(false);
       else setIsLoading(false);
     },
-    [isMounted, lastKnownLocation, requestLocation, fetchListings, appliedQuery, selectedCategoryId, radiusKm],
+    [
+      isMounted,
+      lastKnownLocation,
+      requestLocation,
+      fetchListings,
+      appliedQuery,
+      selectedCategoryId,
+      radiusKm,
+    ],
   );
 
   const loadNextPage = useCallback(async () => {
@@ -493,14 +509,22 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Track whether the initial focus-driven load has completed so the filter
+  // effect doesn't fire prematurely on first mount before any location is known.
+  const initialLoadDoneRef = useRef(false);
+
   useFocusEffect(
     useCallback(() => {
-      loadInitial(false);
+      loadInitial(false).then(() => {
+        initialLoadDoneRef.current = true;
+      });
     }, [loadInitial]),
   );
 
-  // Reload on filter change
+  // Reload on filter change — only after the first focus-load has completed
+  // and only when we already have a location to query against.
   useEffect(() => {
+    if (!initialLoadDoneRef.current) return;
     if (!lastKnownLocation) return;
     setIsLoading(true);
     fetchListings({
@@ -510,7 +534,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
       catId: selectedCategoryId,
       km: radiusKm,
       append: false,
-    }).finally(() => setIsLoading(false));
+    }).finally(() => {
+      if (isMounted()) setIsLoading(false);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedQuery, selectedCategoryId, radiusKm]);
 
@@ -714,7 +740,9 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
           <TouchableOpacity
             style={styles.headerIcon}
             accessibilityRole="button"
-            accessibilityLabel="Menu"
+            accessibilityLabel="Open filters"
+            accessibilityHint="Opens the category and radius filter sheet"
+            onPress={openFilterSheet}
           >
             <Ionicons name="menu" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -723,7 +751,11 @@ export default function BrowseScreen({ navigation }: Props): React.JSX.Element {
             style={styles.headerIcon}
             accessibilityRole="button"
             accessibilityLabel={`Notifications${notificationUnread > 0 ? `, ${notificationUnread} unread` : ''}`}
-            onPress={clearNotifications}
+            accessibilityHint="Navigate to messages"
+            onPress={() => {
+              clearNotifications();
+              navigation.navigate('MessagesTab');
+            }}
           >
             <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
             {notificationUnread > 0 && (

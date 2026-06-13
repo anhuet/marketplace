@@ -41,7 +41,7 @@ const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 function BrowseNavigator() {
   return (
-    <BrowseStack.Navigator screenOptions={{ headerLargeTitle: false }}>
+    <BrowseStack.Navigator screenOptions={{ headerLargeTitle: false, gestureEnabled: true }}>
       <BrowseStack.Screen name="Browse" component={BrowseScreen} options={{ headerShown: false }} />
       <BrowseStack.Screen
         name="ListingDetail"
@@ -69,7 +69,7 @@ function BrowseNavigator() {
 
 function MessagesNavigator() {
   return (
-    <MessagesStack.Navigator screenOptions={{ headerLargeTitle: false }}>
+    <MessagesStack.Navigator screenOptions={{ headerLargeTitle: false, gestureEnabled: true }}>
       <MessagesStack.Screen
         name="Messages"
         component={ConversationListScreen}
@@ -86,7 +86,7 @@ function MessagesNavigator() {
 
 function SellNavigator() {
   return (
-    <SellStack.Navigator screenOptions={{ headerLargeTitle: false }}>
+    <SellStack.Navigator screenOptions={{ headerLargeTitle: false, gestureEnabled: true }}>
       <SellStack.Screen
         name="PostListing"
         component={PostListingScreen}
@@ -107,7 +107,7 @@ function SellNavigator() {
 
 function SavedNavigator() {
   return (
-    <SavedStackNav.Navigator screenOptions={{ headerLargeTitle: false }}>
+    <SavedStackNav.Navigator screenOptions={{ headerLargeTitle: false, gestureEnabled: true }}>
       <SavedStackNav.Screen name="Saved" component={SavedScreen} options={{ headerShown: false }} />
       <SavedStackNav.Screen
         name="ListingDetail"
@@ -125,7 +125,7 @@ function SavedNavigator() {
 
 function ProfileNavigator() {
   return (
-    <ProfileStack.Navigator screenOptions={{ headerLargeTitle: false }}>
+    <ProfileStack.Navigator screenOptions={{ headerLargeTitle: false, gestureEnabled: true }}>
       <ProfileStack.Screen
         name="Profile"
         component={ProfileScreen}
@@ -248,8 +248,18 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             target: route.key,
             canPreventDefault: true,
           });
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
+          if (!event.defaultPrevented) {
+            if (isSell) {
+              // Always reset the SellStack to PostListing with no params so a
+              // fresh blank create form is shown — even if the user previously
+              // arrived here via Edit Listing (which sets listingId in params).
+              navigation.navigate(route.name, {
+                screen: 'PostListing',
+                params: undefined,
+              });
+            } else if (!isFocused) {
+              navigation.navigate(route.name);
+            }
           }
         };
 

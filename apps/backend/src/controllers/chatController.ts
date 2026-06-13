@@ -33,11 +33,6 @@ export async function startConversation(
 
     const conversation = await findOrCreateConversation(listingId, buyerId);
 
-    // Fire-and-forget: notify seller of new inquiry — does not block the response
-    import('../services/pushService').then(({ sendNewInquiryNotification }) => {
-      void sendNewInquiryNotification(conversation.id, listingId);
-    });
-
     res.status(201).json({ conversation });
   } catch (err) {
     next(err);

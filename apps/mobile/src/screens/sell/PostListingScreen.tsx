@@ -174,7 +174,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
       setInviteError(
-        axiosErr?.response?.data?.error?.message ?? 'Failed to redeem invite code. Please try again.',
+        axiosErr?.response?.data?.error?.message ??
+          'Failed to redeem invite code. Please try again.',
       );
     } finally {
       setInviteLoading(false);
@@ -187,7 +188,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         <View style={styles.inviteGateContainer}>
           <Text style={styles.inviteGateTitle}>Invite Code Required</Text>
           <Text style={styles.inviteGateDescription}>
-            You need to redeem an invite code before you can sell items. Ask a friend for their code to get started.
+            You need to redeem an invite code before you can sell items. Ask a friend for their code
+            to get started.
           </Text>
           <FormInput
             label="Invite Code"
@@ -307,7 +309,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
           setLocationAddress(parts.join(', '));
         }
       })
-      .catch(() => { /* silent */ });
+      .catch(() => {
+        /* silent */
+      });
   }, [gps?.latitude, gps?.longitude]);
 
   // ── Edit mode: pre-fill form ─────────────────────────────────────────────
@@ -364,7 +368,11 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         skipResetOnNextFocusRef.current = false;
         return;
       }
-      if (!listingId) {
+      // Read listingId directly from route.params at focus time so we pick up
+      // the current params even when React Navigation resets them to undefined
+      // (e.g. when the Sell tab is tapped after an edit session).
+      const currentListingId = route?.params?.listingId;
+      if (!currentListingId) {
         reset({
           title: '',
           description: '',
@@ -380,7 +388,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
         setDeletingPhotoId(null);
         captureLocation();
       }
-    }, [listingId, reset, captureLocation]),
+    }, [route?.params?.listingId, reset, captureLocation]),
   );
 
   // ── Photo picker ─────────────────────────────────────────────────────────
@@ -388,10 +396,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   const requestMediaPermission = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please allow access to your photo library in Settings.',
-      );
+      Alert.alert('Permission Required', 'Please allow access to your photo library in Settings.');
       return false;
     }
     return true;
@@ -401,10 +406,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
   // lib/imagePipeline.  iPhone gallery returns HEIC by default, which sharp on
   // the backend (built without libheif) cannot decode — we normalise to JPEG
   // client-side.  The pipeline also caps the longest edge at 1 600 px.
-  const toJpeg = (
-    asset: ImagePicker.ImagePickerAsset,
-    indexInBatch: number,
-  ): Promise<LocalPhoto> =>
+  const toJpeg = (asset: ImagePicker.ImagePickerAsset, indexInBatch: number): Promise<LocalPhoto> =>
     toJpegLocalPhoto({
       uri: asset.uri,
       width: asset.width ?? undefined,
@@ -446,7 +448,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       }));
       setPhotos((prev) => [...prev, ...uploaded].slice(0, MAX_PHOTOS));
     } catch {
-      if (isMounted()) Alert.alert('Upload Failed', 'Could not upload the photo(s). Please try again.');
+      if (isMounted())
+        Alert.alert('Upload Failed', 'Could not upload the photo(s). Please try again.');
     } finally {
       if (isMounted()) setUploadingPhoto(false);
     }
@@ -715,7 +718,9 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
       }
     } catch (err: unknown) {
       if (!isMounted()) return;
-      const axiosErr = err as { response?: { data?: { error?: { message?: string } }; status?: number } };
+      const axiosErr = err as {
+        response?: { data?: { error?: { message?: string } }; status?: number };
+      };
       const serverMsg = axiosErr?.response?.data?.error?.message;
       const status = axiosErr?.response?.status;
       setApiError(
@@ -730,13 +735,7 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
-  const renderPhotoThumbnail = ({
-    item,
-    index,
-  }: {
-    item: EditablePhoto;
-    index: number;
-  }) => {
+  const renderPhotoThumbnail = ({ item, index }: { item: EditablePhoto; index: number }) => {
     const isDeleting = item.kind === 'remote' && deletingPhotoId === item.id;
     return (
       <View style={styles.thumbnailWrapper}>
@@ -775,7 +774,10 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
     );
   }
 
-  const categoryOptions = apiCategories.length > 0 ? apiCategories : CATEGORIES.map((c) => ({ id: c.slug, name: c.name, slug: c.slug }));
+  const categoryOptions =
+    apiCategories.length > 0
+      ? apiCategories
+      : CATEGORIES.map((c) => ({ id: c.slug, name: c.name, slug: c.slug }));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
@@ -869,7 +871,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
             <View style={styles.voiceContainer}>
               <Text style={styles.sectionLabel}>VOICE FILL</Text>
               <Text style={styles.voiceHint}>
-                Describe your item in English or German — title, price and category will be filled in automatically.
+                Describe your item in English or German — title, price and category will be filled
+                in automatically.
               </Text>
               <TouchableOpacity
                 style={[
@@ -1071,7 +1074,8 @@ export default function PostListingScreen({ route, navigation }: Props): React.J
                   fallback={
                     <View style={[styles.mapPreview, styles.mapFallback]}>
                       <Text style={styles.mapFallbackText}>
-                        {locationAddress ?? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
+                        {locationAddress ??
+                          `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`}
                       </Text>
                     </View>
                   }

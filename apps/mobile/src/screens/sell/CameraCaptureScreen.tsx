@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   ScrollView,
@@ -28,6 +29,7 @@ import { Image } from 'expo-image';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { toJpegLocalPhoto, type LocalPhoto } from '../../lib/imagePipeline';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { SellStackParamList } from '../../navigation/types';
 
@@ -54,6 +56,7 @@ const PLACEHOLDER_COUNT = 3; // empty placeholder boxes shown before any capture
 export default function CameraCaptureScreen({ route, navigation }: Props): React.JSX.Element {
   const { remaining, onCapture } = route.params;
   const insets = useSafeAreaInsets();
+  const isMounted = useIsMounted();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState<FlashMode>('auto');
@@ -114,13 +117,19 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
   const canCapture = photos.length < remaining && !capturing;
 
   const handleCapture = useCallback(async () => {
+    // Guard against double-tap while a capture is already in flight and
+    // against a missing camera ref (possible on first render before Fabric
+    // has attached the native view).
     if (!canCapture || !cameraRef.current) return;
     setCapturing(true);
     try {
       const pic = await cameraRef.current.takePictureAsync({
         quality: 0.8,
-        skipProcessing: false,
+        // skipProcessing: true on Android avoids the native JPEG post-processing
+        // path that can throw on some Android camera HAL versions.
+        skipProcessing: Platform.OS === 'android',
       });
+      if (!isMounted()) return;
       if (!pic) return;
       const local = await toJpegLocalPhoto({
         uri: pic.uri,
@@ -128,11 +137,17 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
         height: pic.height,
         indexInBatch: photosRef.current.length,
       });
+      if (!isMounted()) return;
       setPhotos((prev) => [...prev, local]);
+    } catch {
+      if (!isMounted()) return;
+      Alert.alert('Không thể chụp ảnh', 'Đã xảy ra lỗi khi chụp ảnh. Vui lòng thử lại.', [
+        { text: 'OK' },
+      ]);
     } finally {
-      setCapturing(false);
+      if (isMounted()) setCapturing(false);
     }
-  }, [canCapture]);
+  }, [canCapture, isMounted]);
 
   // ── Remove from strip ─────────────────────────────────────────────────────
 
@@ -160,9 +175,7 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
         ]}
       >
         <Text style={styles.permissionTitle}>Camera Access Required</Text>
-        <Text style={styles.permissionBody}>
-          Allow camera access to capture listing photos.
-        </Text>
+        <Text style={styles.permissionBody}>Allow camera access to capture listing photos.</Text>
         {permission.canAskAgain ? (
           <TouchableOpacity
             style={styles.permissionButton}
@@ -201,12 +214,7 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
   return (
     <View style={styles.root}>
       {/* Live camera preview — fills the whole screen */}
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        flash={flashMode}
-        facing="back"
-      />
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} flash={flashMode} facing="back" />
 
       {/* Top bar — flash toggle + Done */}
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
@@ -232,12 +240,7 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
       </View>
 
       {/* Bottom area: thumbnail strip + shutter */}
-      <View
-        style={[
-          styles.bottomArea,
-          { paddingBottom: insets.bottom + spacing.base },
-        ]}
-      >
+      <View style={[styles.bottomArea, { paddingBottom: insets.bottom + spacing.base }]}>
         {/* Thumbnail strip */}
         <ScrollView
           horizontal
@@ -276,16 +279,14 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
 
           {/* Empty placeholder boxes (shown while under limit and count < PLACEHOLDER_COUNT) */}
           {!atLimit
-            ? Array.from({ length: Math.max(0, PLACEHOLDER_COUNT - photos.length) }).map(
-                (_, i) => (
-                  <View
-                    key={`placeholder-${i}`}
-                    style={styles.placeholder}
-                    accessibilityElementsHidden
-                    importantForAccessibility="no"
-                  />
-                ),
-              )
+            ? Array.from({ length: Math.max(0, PLACEHOLDER_COUNT - photos.length) }).map((_, i) => (
+                <View
+                  key={`placeholder-${i}`}
+                  style={styles.placeholder}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+              ))
             : null}
         </ScrollView>
 
@@ -308,9 +309,7 @@ export default function CameraCaptureScreen({ route, navigation }: Props): React
           accessibilityRole="button"
           accessibilityLabel="Take photo"
           accessibilityHint={
-            atLimit
-              ? 'Photo limit reached'
-              : `${remaining - photos.length} photos remaining`
+            atLimit ? 'Photo limit reached' : `${remaining - photos.length} photos remaining`
           }
           accessibilityState={{ disabled: !canCapture }}
         >

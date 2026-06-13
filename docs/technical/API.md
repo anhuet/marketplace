@@ -787,7 +787,7 @@ The token is validated against `https://${AUTH0_DOMAIN}/.well-known/jwks.json` u
 ### POST /api/v1/conversations
 
 **Auth required**: Yes
-**Description**: Creates or retrieves an existing conversation between the authenticated buyer and the listing owner. The unique constraint `(listingId, buyerId)` makes this operation idempotent — calling it twice returns the same conversation. The authenticated user cannot start a conversation on their own listing.
+**Description**: Creates or retrieves an existing conversation between the authenticated buyer and the listing owner. The unique constraint `(listingId, buyerId)` makes this operation idempotent — calling it twice returns the same conversation. The authenticated user cannot start a conversation on their own listing. **No push notification is sent to the seller on conversation creation** — seller interest notifications are triggered by the save (favorite) action instead (see `POST /api/v1/saved`).
 
 **Request body**:
 ```json
@@ -1069,3 +1069,152 @@ Connections without a valid token are rejected with an error event. On successfu
 - `401` — Missing or invalid Auth0 Bearer token
 - `403` — Token does not belong to the authenticated user
 - `404` — Push token not found
+
+---
+
+## Saved Listings
+
+### POST /api/v1/saved
+
+**Auth required**: Yes
+**Description**: Saves (favorites) a listing for the authenticated user. Idempotent on repeated calls — a second save on the same listing returns 409. After the row is created, a fire-and-forget push notification is sent to the listing seller with `data.type = 'new_inquiry'` (title "New interest", body `Someone saved "<title>"`). The notification is suppressed if the saver is the seller themselves.
+
+**Request body**:
+```json
+{
+  "listingId": "string — UUID of the listing to save"
+}
+```
+
+**Response 201**:
+```json
+{
+  "saved": {
+    "id": "string — UUID",
+    "userId": "string — UUID",
+    "listingId": "string — UUID",
+    "createdAt": "string — ISO 8601"
+  }
+}
+```
+
+**Error codes**:
+- `400` — Validation error (listingId not a valid UUID)
+- `401` — Missing or invalid Auth0 Bearer token
+- `404` — Listing not found or deleted
+- `409` (`CONFLICT`) — Listing is already saved by this user
+
+---
+
+### DELETE /api/v1/saved/:listingId
+
+**Auth required**: Yes
+**Description**: Removes a listing from the authenticated user's saved list. No push notification is sent.
+
+**Path parameters**:
+- `listingId` — listing UUID
+
+**Response 200**:
+```json
+{
+  "success": true
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+- `404` — Saved listing not found (not in user's saved list)
+
+---
+
+### GET /api/v1/saved
+
+**Auth required**: Yes
+**Description**: Returns the authenticated user's saved listings, ordered newest save first. Deleted listings are excluded from results. Each listing includes its cover image (first image by order), seller info, and category. Supports offset-based pagination.
+
+**Query parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (min 1) |
+| `limit` | integer | No | `20` | Results per page (1 – 50) |
+
+**Response 200**:
+```json
+{
+  "savedListings": [
+    {
+      "id": "string — UUID (saved listing record)",
+      "userId": "string — UUID",
+      "listingId": "string — UUID",
+      "createdAt": "string — ISO 8601",
+      "listing": {
+        "id": "string — UUID",
+        "title": "string",
+        "price": "string — decimal string",
+        "condition": "string — enum Condition",
+        "status": "string — ACTIVE | SOLD",
+        "latitude": "number",
+        "longitude": "number",
+        "createdAt": "string — ISO 8601",
+        "updatedAt": "string — ISO 8601",
+        "images": [{ "id": "string", "url": "string — presigned HTTPS URL", "order": 0 }],
+        "seller": {
+          "id": "string",
+          "displayName": "string",
+          "avatarUrl": "string | null",
+          "averageRating": "number",
+          "ratingCount": "number"
+        },
+        "category": { "id": "string", "name": "string", "slug": "string" }
+      }
+    }
+  ],
+  "total": "number — total saved listings for this user",
+  "page": "number — current page",
+  "limit": "number — results per page",
+  "hasMore": "boolean"
+}
+```
+
+**Error codes**:
+- `400` — Validation error (invalid page/limit)
+- `401` — Missing or invalid Auth0 Bearer token
+
+---
+
+### GET /api/v1/saved/ids
+
+**Auth required**: Yes
+**Description**: Returns an array of listing IDs that the authenticated user has saved. Lightweight — no pagination. Used by the mobile app to mark listings as favorited in list/grid views without fetching full listing data.
+
+**Response 200**:
+```json
+{
+  "listingIds": ["string — UUID", "..."]
+}
+```
+
+**Error codes**:
+- `401` — Missing or invalid Auth0 Bearer token
+
+---
+
+### GET /api/v1/saved/:listingId
+
+**Auth required**: Yes
+**Description**: Returns whether the authenticated user has saved the specified listing.
+
+**Path parameters**:
+- `listingId` — listing UUID
+
+**Response 200**:
+```json
+{
+  "isSaved": "boolean"
+}
+```
+
+**Error codes**:
+- `400` — Validation error (listingId not a valid UUID)
+- `401` — Missing or invalid Auth0 Bearer token

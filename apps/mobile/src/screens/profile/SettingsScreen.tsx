@@ -6,7 +6,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 
 export default function SettingsScreen(): React.JSX.Element {
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScreenHeader title="Settings" />
       <View style={styles.content}>
         <Text style={styles.placeholder}>Settings coming soon.</Text>
